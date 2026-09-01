@@ -88,3 +88,17 @@
 .purchase-freight{display:block;color:#b79b5d!important;border-top:1px dashed #36312a;padding-top:8px}
 .quote-material-items{display:grid;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid #292c30}
 .quote-material-items small{display:flex;justify-content:space-between;gap:12px;color:#aaa}
+
+/* Edição e exclusão de clientes, veículos e serviços */
+.form-action-row{display:flex;gap:10px;align-items:center}.form-action-row .admin-primary{flex:1}.form-action-row .admin-secondary{min-width:110px}
+.entity-list-row{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%}.entity-list-row>div:first-child{display:grid;gap:4px;min-width:0}.entity-actions,.table-actions{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.edit-icon{display:grid;place-items:center;width:31px;height:31px;border:1px solid #5f4a19;background:#211a0c;color:#efbf50;border-radius:8px;cursor:pointer}.edit-icon:hover{background:#30250e;border-color:#9c7828}.danger-icon:hover{background:#361616;border-color:#8b3636}
+.table-actions .danger-icon{margin-left:0}.admin-table th:last-child,.admin-table td:last-child{white-space:nowrap}
+@media(max-width:600px){.form-action-row{flex-direction:column}.form-action-row .admin-primary,.form-action-row .admin-secondary{width:100%}.entity-list-row{align-items:flex-start}.entity-actions{margin-left:auto}}
+
+/* Ícone do calendário branco nos inputs de data */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 1;
+  cursor: pointer;
+}

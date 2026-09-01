@@ -26,6 +26,7 @@ import {
   LogOut,
   Plus,
   Package,
+  Pencil,
   ReceiptText,
   RefreshCw,
   ShoppingCart,
@@ -67,6 +68,9 @@ export default function AdminPage() {
   const [expenses, setExpenses] = useState<MonthlyExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
   const [clientForm, setClientForm] = useState({ name: "", phone: "", email: "", cpfCnpj: "", address: "" });
   const [vehicleForm, setVehicleForm] = useState({ customerId: "", plate: "", brand: "", model: "", year: "", color: "" });
@@ -151,11 +155,7 @@ export default function AdminPage() {
   const freightCost = Number(purchaseForm.freightCost || 0);
   const purchaseTotal = purchaseSubtotal + freightCost;
   const serviceMaterialCost = serviceMaterials.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
-  const serviceMaterialRealCost = serviceMaterials.reduce(
-  (sum, item) =>
-    sum + Number(item.costSubtotal ?? (item.quantity * item.unitCost)),
-  0
-);
+  const serviceMaterialRealCost = serviceMaterials.reduce((sum, item) => sum + Number(item.costSubtotal ?? (Number(item.quantity || 0) * Number(item.unitCost || 0))), 0);
   const serviceMaterialMargin = serviceMaterialCost - serviceMaterialRealCost;
   const selectedQuoteOrder = orders.find((o) => o.id === quoteOrderId);
 
@@ -173,19 +173,93 @@ export default function AdminPage() {
   const monthOperatingCost = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const monthNetProfit = monthRevenue - monthPurchaseCost - monthOperatingCost;
 
+  function resetCustomerForm() {
+    setEditingCustomerId(null);
+    setClientForm({ name: "", phone: "", email: "", cpfCnpj: "", address: "" });
+  }
+
   async function addCustomer(e: FormEvent) {
     e.preventDefault();
-    await addDoc(collection(db, "customers"), { ...clientForm, createdAt: serverTimestamp() });
-    setClientForm({ name: "", phone: "", email: "", cpfCnpj: "", address: "" });
-    setNotice("Cliente cadastrado com sucesso.");
+    if (editingCustomerId) {
+      await updateDoc(doc(db, "customers", editingCustomerId), { ...clientForm, updatedAt: serverTimestamp() });
+      setNotice("Cliente atualizado com sucesso.");
+    } else {
+      await addDoc(collection(db, "customers"), { ...clientForm, createdAt: serverTimestamp() });
+      setNotice("Cliente cadastrado com sucesso.");
+    }
+    resetCustomerForm();
     await loadAll();
+  }
+
+  function editCustomer(customer: Customer) {
+    setEditingCustomerId(customer.id);
+    setClientForm({
+      name: customer.name || "",
+      phone: customer.phone || "",
+      email: customer.email || "",
+      cpfCnpj: customer.cpfCnpj || "",
+      address: customer.address || "",
+    });
+    setTab("clientes");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function removeCustomer(customer: Customer) {
+    const linkedVehicles = vehicles.filter((v) => v.customerId === customer.id);
+    const linkedOrders = orders.filter((o) => o.customerId === customer.id);
+    if (linkedVehicles.length || linkedOrders.length) {
+      setNotice(`Não é possível excluir ${customer.name}. Existem ${linkedVehicles.length} veículo(s) e ${linkedOrders.length} serviço(s) vinculados.`);
+      return;
+    }
+    if (!window.confirm(`Excluir o cliente ${customer.name}? Esta ação não poderá ser desfeita.`)) return;
+    await deleteDoc(doc(db, "customers", customer.id));
+    if (editingCustomerId === customer.id) resetCustomerForm();
+    setNotice("Cliente excluído com sucesso.");
+    await loadAll();
+  }
+
+  function resetVehicleForm() {
+    setEditingVehicleId(null);
+    setVehicleForm({ customerId: "", plate: "", brand: "", model: "", year: "", color: "" });
   }
 
   async function addVehicle(e: FormEvent) {
     e.preventDefault();
-    await addDoc(collection(db, "vehicles"), { ...vehicleForm, createdAt: serverTimestamp() });
-    setVehicleForm({ customerId: "", plate: "", brand: "", model: "", year: "", color: "" });
-    setNotice("Veículo cadastrado com sucesso.");
+    if (editingVehicleId) {
+      await updateDoc(doc(db, "vehicles", editingVehicleId), { ...vehicleForm, updatedAt: serverTimestamp() });
+      setNotice("Veículo atualizado com sucesso.");
+    } else {
+      await addDoc(collection(db, "vehicles"), { ...vehicleForm, createdAt: serverTimestamp() });
+      setNotice("Veículo cadastrado com sucesso.");
+    }
+    resetVehicleForm();
+    await loadAll();
+  }
+
+  function editVehicle(vehicle: Vehicle) {
+    setEditingVehicleId(vehicle.id);
+    setVehicleForm({
+      customerId: vehicle.customerId || "",
+      plate: vehicle.plate || "",
+      brand: vehicle.brand || "",
+      model: vehicle.model || "",
+      year: vehicle.year || "",
+      color: vehicle.color || "",
+    });
+    setTab("veiculos");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function removeVehicle(vehicle: Vehicle) {
+    const linkedOrders = orders.filter((o) => o.vehicleId === vehicle.id);
+    if (linkedOrders.length) {
+      setNotice(`Não é possível excluir ${vehicle.brand} ${vehicle.model}. Existem ${linkedOrders.length} serviço(s) vinculados.`);
+      return;
+    }
+    if (!window.confirm(`Excluir o veículo ${vehicle.brand} ${vehicle.model} • ${vehicle.plate}?`)) return;
+    await deleteDoc(doc(db, "vehicles", vehicle.id));
+    if (editingVehicleId === vehicle.id) resetVehicleForm();
+    setNotice("Veículo excluído com sucesso.");
     await loadAll();
   }
 
@@ -256,34 +330,74 @@ export default function AdminPage() {
     setServiceMaterials((items) => items.filter((item) => item.productId !== productId));
   }
 
+  function resetOrderForm() {
+    setEditingOrderId(null);
+    setOrderForm({
+      customerId: "",
+      vehicleId: "",
+      serviceDescription: "",
+      materialCost: "",
+      laborCost: "",
+      scheduledDate: "",
+      estimatedDelivery: "",
+      notes: "",
+    });
+    setServiceMaterials([]);
+    setServiceMaterialForm({ productId: "", quantity: "1", markupPercent: "20" });
+  }
+
+  function editOrder(order: ServiceOrder) {
+    setEditingOrderId(order.id);
+    setOrderForm({
+      customerId: order.customerId || "",
+      vehicleId: order.vehicleId || "",
+      serviceDescription: order.serviceDescription || "",
+      materialCost: String(order.materialCost || 0),
+      laborCost: String(order.laborCost || 0),
+      scheduledDate: order.scheduledDate || "",
+      estimatedDelivery: order.estimatedDelivery || "",
+      notes: order.notes || "",
+    });
+    setServiceMaterials(order.materialItems || []);
+    setTab("servicos");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function addOrder(e: FormEvent) {
     e.preventDefault();
-    const token = crypto.randomUUID().replaceAll("-", "");
+    const existingOrder = editingOrderId ? orders.find((o) => o.id === editingOrderId) : undefined;
+    const oldItems = existingOrder?.materialItems || [];
 
     for (const item of serviceMaterials) {
       const product = products.find((p) => p.id === item.productId);
-      if (!product || Number(product.stockCurrent || 0) < item.quantity) {
-        setNotice(`Estoque insuficiente para ${item.productName}. Atualize o estoque e tente novamente.`);
+      const oldQuantity = oldItems.find((old) => old.productId === item.productId)?.quantity || 0;
+      const availableForEdit = Number(product?.stockCurrent || 0) + oldQuantity;
+      if (!product || availableForEdit < item.quantity) {
+        setNotice(`Estoque insuficiente para ${item.productName}. Disponível para esta ordem: ${availableForEdit} ${product?.unit || "un"}.`);
         return;
       }
     }
 
+    const token = existingOrder?.publicToken || crypto.randomUUID().replaceAll("-", "");
     const payload = {
       ...orderForm,
       materialCost: serviceMaterialCost,
       materialRealCost: serviceMaterialRealCost,
       materialItems: serviceMaterials,
       laborCost: Number(orderForm.laborCost || 0),
-      status: "Agendado" as ServiceStatus,
+      status: existingOrder?.status || ("Agendado" as ServiceStatus),
       publicToken: token,
+      ...(existingOrder?.completedAt ? { completedAt: existingOrder.completedAt } : {}),
     };
 
     const customer = customers.find((c) => c.id === payload.customerId);
     const vehicle = vehicles.find((v) => v.id === payload.vehicleId);
     const batch = writeBatch(db);
-    const ref = doc(collection(db, "serviceOrders"));
+    const ref = existingOrder ? doc(db, "serviceOrders", existingOrder.id) : doc(collection(db, "serviceOrders"));
 
-    batch.set(ref, { ...payload, createdAt: serverTimestamp() });
+    if (existingOrder) batch.update(ref, { ...payload, updatedAt: serverTimestamp() });
+    else batch.set(ref, { ...payload, createdAt: serverTimestamp() });
+
     batch.set(doc(db, "publicTracking", token), {
       orderId: ref.id,
       customerName: customer?.name || "Cliente",
@@ -297,28 +411,36 @@ export default function AdminPage() {
       total: payload.materialCost + payload.laborCost,
     });
 
-    serviceMaterials.forEach((item) => {
-      batch.update(doc(db, "products", item.productId), {
-        stockCurrent: increment(-item.quantity),
-        updatedAt: serverTimestamp(),
-      });
+    const productIds = new Set([...oldItems.map((i) => i.productId), ...serviceMaterials.map((i) => i.productId)]);
+    productIds.forEach((productId) => {
+      const oldQty = oldItems.find((i) => i.productId === productId)?.quantity || 0;
+      const newQty = serviceMaterials.find((i) => i.productId === productId)?.quantity || 0;
+      const stockDelta = oldQty - newQty;
+      if (stockDelta !== 0) {
+        batch.update(doc(db, "products", productId), { stockCurrent: increment(stockDelta), updatedAt: serverTimestamp() });
+      }
     });
 
     await batch.commit();
+    setNotice(existingOrder ? "Serviço atualizado e estoque recalculado com sucesso." : "Serviço agendado, materiais baixados do estoque e acompanhamento criado.");
+    resetOrderForm();
+    await loadAll();
+  }
 
-    setOrderForm({
-      customerId: "",
-      vehicleId: "",
-      serviceDescription: "",
-      materialCost: "",
-      laborCost: "",
-      scheduledDate: "",
-      estimatedDelivery: "",
-      notes: "",
+  async function removeOrder(order: ServiceOrder) {
+    if (!window.confirm(`Excluir o serviço de ${customerName(order.customerId)}? Os materiais consumidos serão devolvidos ao estoque.`)) return;
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "serviceOrders", order.id));
+    if (order.publicToken) batch.delete(doc(db, "publicTracking", order.publicToken));
+    (order.materialItems || []).forEach((item) => {
+      batch.update(doc(db, "products", item.productId), {
+        stockCurrent: increment(Number(item.quantity || 0)),
+        updatedAt: serverTimestamp(),
+      });
     });
-    setServiceMaterials([]);
-    setServiceMaterialForm({ productId: "", quantity: "1", markupPercent: "20" });
-    setNotice("Serviço agendado, materiais baixados do estoque e acompanhamento criado.");
+    await batch.commit();
+    if (editingOrderId === order.id) resetOrderForm();
+    setNotice("Serviço excluído e materiais devolvidos ao estoque.");
     await loadAll();
   }
 
@@ -551,7 +673,7 @@ export default function AdminPage() {
   <div class="notes"><b>Observações</b><br/><br/>${safe(selectedQuoteOrder.notes || "Sem observações adicionais.")}</div>
 
   <div class="signature"><div>Assinatura do cliente</div><div>Felipe Auto Design</div></div>
-  <footer class="footer"><b>Felipe Auto Design</b><br/>Avenida Alfredo de Faria, 87 - Tutunas - Uberaba/MG<br/>(34) 99154-3776 • @felipeautodesign • www.felipeautodesign.com.br<br/><b>CNPJ: 52.198.532/0001-89</b></footer>
+  <footer class="footer"><b>Felipe Auto Design</b><br/>Avenida Alfredo de Faria, 87 - Tutunas - Uberaba/MG<br/>(34) 99154-3776 • @felipeautodesign • www.felipeautodesign.com.br</footer>
 </div>
 <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
 </body>
@@ -603,37 +725,37 @@ export default function AdminPage() {
               <article><span>Última compra</span><strong>{lastPurchase ? money(lastPurchase.totalAmount) : "-"}</strong><small>{lastPurchase ? dateBR(lastPurchase.purchaseDate) : "Sem compras"}</small></article>
             </div>
             <h2 className="admin-section-title">Serviços recentes</h2>
-            <OrderTable orders={orders.slice(0, 8)} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} />
+            <OrderTable orders={orders.slice(0, 8)} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
           </div>}
 
           {tab === "clientes" && <div className="admin-two-cols">
             <form className="admin-card admin-form" onSubmit={addCustomer}>
-              <h2>Novo cliente</h2>
+              <h2>{editingCustomerId ? "Editar cliente" : "Novo cliente"}</h2>
               <label><span>Nome *</span><input value={clientForm.name} onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })} required /></label>
               <label><span>WhatsApp *</span><input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} required /></label>
               <label><span>E-mail</span><input type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} /></label>
               <label><span>CPF/CNPJ</span><input value={clientForm.cpfCnpj} onChange={(e) => setClientForm({ ...clientForm, cpfCnpj: e.target.value })} /></label>
               <label><span>Endereço</span><input value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} /></label>
-              <button className="admin-primary">Cadastrar cliente</button>
+              <div className="form-action-row"><button className="admin-primary">{editingCustomerId ? "Salvar alterações" : "Cadastrar cliente"}</button>{editingCustomerId && <button type="button" className="admin-secondary" onClick={resetCustomerForm}>Cancelar</button>}</div>
             </form>
-            <div className="admin-card"><h2>Clientes cadastrados</h2><div className="admin-list">{customers.map((c) => <article key={c.id}><b>{c.name}</b><span>{c.phone}</span><small>{c.email || c.cpfCnpj || c.address || "Sem dados adicionais"}</small></article>)}</div></div>
+            <div className="admin-card"><h2>Clientes cadastrados</h2><div className="admin-list">{customers.map((c) => <article key={c.id}><div className="entity-list-row"><div><b>{c.name}</b><span>{c.phone}</span><small>{c.email || c.cpfCnpj || c.address || "Sem dados adicionais"}</small></div><div className="entity-actions"><button type="button" className="edit-icon" onClick={() => editCustomer(c)} title="Editar cliente"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => removeCustomer(c)} title="Excluir cliente"><Trash2 size={15} /></button></div></div></article>)}</div></div>
           </div>}
 
           {tab === "veiculos" && <div className="admin-two-cols">
             <form className="admin-card admin-form" onSubmit={addVehicle}>
-              <h2>Novo veículo</h2>
+              <h2>{editingVehicleId ? "Editar veículo" : "Novo veículo"}</h2>
               <label><span>Cliente *</span><select value={vehicleForm.customerId} onChange={(e) => setVehicleForm({ ...vehicleForm, customerId: e.target.value })} required><option value="">Selecione</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
               <div className="admin-form-row"><label><span>Placa *</span><input value={vehicleForm.plate} onChange={(e) => setVehicleForm({ ...vehicleForm, plate: e.target.value.toUpperCase() })} required /></label><label><span>Ano</span><input value={vehicleForm.year} onChange={(e) => setVehicleForm({ ...vehicleForm, year: e.target.value })} /></label></div>
               <div className="admin-form-row"><label><span>Marca *</span><input value={vehicleForm.brand} onChange={(e) => setVehicleForm({ ...vehicleForm, brand: e.target.value })} required /></label><label><span>Modelo *</span><input value={vehicleForm.model} onChange={(e) => setVehicleForm({ ...vehicleForm, model: e.target.value })} required /></label></div>
               <label><span>Cor</span><input value={vehicleForm.color} onChange={(e) => setVehicleForm({ ...vehicleForm, color: e.target.value })} /></label>
-              <button className="admin-primary">Cadastrar veículo</button>
+              <div className="form-action-row"><button className="admin-primary">{editingVehicleId ? "Salvar alterações" : "Cadastrar veículo"}</button>{editingVehicleId && <button type="button" className="admin-secondary" onClick={resetVehicleForm}>Cancelar</button>}</div>
             </form>
-            <div className="admin-card"><h2>Veículos</h2><div className="admin-list">{vehicles.map((v) => <article key={v.id}><b>{v.brand} {v.model}</b><span>{v.plate} • {v.color || "Cor não informada"}</span><small>{customerName(v.customerId)}</small></article>)}</div></div>
+            <div className="admin-card"><h2>Veículos</h2><div className="admin-list">{vehicles.map((v) => <article key={v.id}><div className="entity-list-row"><div><b>{v.brand} {v.model}</b><span>{v.plate} • {v.color || "Cor não informada"}</span><small>{customerName(v.customerId)}</small></div><div className="entity-actions"><button type="button" className="edit-icon" onClick={() => editVehicle(v)} title="Editar veículo"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => removeVehicle(v)} title="Excluir veículo"><Trash2 size={15} /></button></div></div></article>)}</div></div>
           </div>}
 
           {tab === "servicos" && <div>
             <form className="admin-card admin-form order-form" onSubmit={addOrder}>
-              <h2>Novo serviço / agendamento</h2>
+              <h2>{editingOrderId ? "Editar serviço / agendamento" : "Novo serviço / agendamento"}</h2>
               <div className="admin-form-row"><label><span>Cliente *</span><select value={orderForm.customerId} onChange={(e) => setOrderForm({ ...orderForm, customerId: e.target.value, vehicleId: "" })} required><option value="">Selecione</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label><span>Veículo *</span><select value={orderForm.vehicleId} onChange={(e) => setOrderForm({ ...orderForm, vehicleId: e.target.value })} required><option value="">Selecione</option>{filteredVehicles.map((v) => <option key={v.id} value={v.id}>{v.brand} {v.model} • {v.plate}</option>)}</select></label></div>
               <label><span>Serviço a ser realizado *</span><textarea rows={3} value={orderForm.serviceDescription} onChange={(e) => setOrderForm({ ...orderForm, serviceDescription: e.target.value })} required placeholder="Ex.: Recuperação do para-choque dianteiro + pintura" /></label>
 
@@ -657,10 +779,10 @@ export default function AdminPage() {
               <div className="admin-form-row"><label><span>Valor material cobrado (automático)</span><input value={money(serviceMaterialCost)} readOnly /></label><label><span>Valor mão de obra (R$)</span><input type="number" min="0" step="0.01" value={orderForm.laborCost} onChange={(e) => setOrderForm({ ...orderForm, laborCost: e.target.value })} /></label></div>
               <div className="admin-form-row"><label><span>Data agendada *</span><input type="date" value={orderForm.scheduledDate} onChange={(e) => setOrderForm({ ...orderForm, scheduledDate: e.target.value })} required /></label><label><span>Estimativa de entrega *</span><input type="date" value={orderForm.estimatedDelivery} onChange={(e) => setOrderForm({ ...orderForm, estimatedDelivery: e.target.value })} required /></label></div>
               <label><span>Observações para o cliente</span><textarea rows={2} value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} /></label>
-              <button className="admin-primary">Agendar serviço e gerar acompanhamento</button>
+              <div className="form-action-row"><button className="admin-primary">{editingOrderId ? "Salvar alterações do serviço" : "Agendar serviço e gerar acompanhamento"}</button>{editingOrderId && <button type="button" className="admin-secondary" onClick={resetOrderForm}>Cancelar</button>}</div>
             </form>
             <h2 className="admin-section-title">Ordens de serviço</h2>
-            <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} />
+            <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
           </div>}
 
           {tab === "produtos" && <div className="admin-two-cols product-layout">
@@ -773,7 +895,7 @@ export default function AdminPage() {
               <div className="admin-card"><h2>Custos operacionais</h2><div className="admin-list expense-list">{monthExpenses.length === 0 ? <p className="admin-muted">Nenhum custo operacional lançado neste mês.</p> : monthExpenses.map((expense) => <article key={expense.id}><div className="expense-line"><div><b>{expense.category}</b><span>{expense.description} • {dateBR(expense.expenseDate)}</span></div><strong>{money(expense.amount)}</strong><button type="button" className="danger-icon" onClick={() => removeExpense(expense.id)}><Trash2 size={15} /></button></div></article>)}</div></div>
             </div>
 
-            <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} /></div>
+            <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} /></div>
             <div className="admin-card closing-section"><h2>Compras de materiais do mês</h2><div className="admin-list purchase-list">{monthPurchases.length === 0 ? <p className="admin-muted">Nenhuma compra de material neste mês.</p> : monthPurchases.map((p) => <article key={p.id}><div className="purchase-line"><div><b>{p.supplier}</b><span>{dateBR(p.purchaseDate)} {p.invoiceNumber ? `• NF ${p.invoiceNumber}` : ""}</span></div><strong>{money(p.totalAmount)}</strong></div><small>{p.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ") || p.products || "Produtos não detalhados"}</small></article>)}</div></div>
           </div>}
 
@@ -790,12 +912,16 @@ function OrderTable({
   vehicleName,
   onStatus,
   onCopy,
+  onEdit,
+  onDelete,
 }: {
   orders: ServiceOrder[];
   customerName: (id: string) => string;
   vehicleName: (id: string) => string;
   onStatus: (order: ServiceOrder, status: ServiceStatus) => void;
   onCopy: (token: string) => void;
+  onEdit: (order: ServiceOrder) => void;
+  onDelete: (order: ServiceOrder) => void;
 }) {
-  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Cliente / veículo</th><th>Serviço</th><th>Agenda</th><th>Valores</th><th>Status</th><th>Cliente</th></tr></thead><tbody>{orders.length === 0 ? <tr><td colSpan={6}>Nenhum serviço cadastrado.</td></tr> : orders.map((o) => <tr key={o.id}><td><b>{customerName(o.customerId)}</b><small>{vehicleName(o.vehicleId)}</small></td><td>{o.serviceDescription}</td><td><b>{dateBR(o.scheduledDate)}</b><small>Entrega: {dateBR(o.estimatedDelivery)}</small></td><td><b>{money(Number(o.materialCost) + Number(o.laborCost))}</b><small>Material {money(Number(o.materialCost))} • M.O. {money(Number(o.laborCost))}</small></td><td><select value={o.status} onChange={(e) => onStatus(o, e.target.value as ServiceStatus)}>{SERVICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></td><td><button className="copy-link" onClick={() => onCopy(o.publicToken)}><Copy size={15} /> Copiar link</button></td></tr>)}</tbody></table></div>;
+  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Cliente / veículo</th><th>Serviço</th><th>Agenda</th><th>Valores</th><th>Status</th><th>Cliente</th><th>Ações</th></tr></thead><tbody>{orders.length === 0 ? <tr><td colSpan={7}>Nenhum serviço cadastrado.</td></tr> : orders.map((o) => <tr key={o.id}><td><b>{customerName(o.customerId)}</b><small>{vehicleName(o.vehicleId)}</small></td><td>{o.serviceDescription}</td><td><b>{dateBR(o.scheduledDate)}</b><small>Entrega: {dateBR(o.estimatedDelivery)}</small></td><td><b>{money(Number(o.materialCost) + Number(o.laborCost))}</b><small>Material {money(Number(o.materialCost))} • M.O. {money(Number(o.laborCost))}</small></td><td><select value={o.status} onChange={(e) => onStatus(o, e.target.value as ServiceStatus)}>{SERVICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></td><td><button className="copy-link" onClick={() => onCopy(o.publicToken)}><Copy size={15} /> Copiar link</button></td><td><div className="table-actions"><button type="button" className="edit-icon" onClick={() => onEdit(o)} title="Editar serviço"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => onDelete(o)} title="Excluir serviço"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>;
 }
