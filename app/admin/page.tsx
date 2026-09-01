@@ -151,7 +151,11 @@ export default function AdminPage() {
   const freightCost = Number(purchaseForm.freightCost || 0);
   const purchaseTotal = purchaseSubtotal + freightCost;
   const serviceMaterialCost = serviceMaterials.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
-  const serviceMaterialRealCost = serviceMaterials.reduce((sum, item) => sum + Number(item.costSubtotal ?? (item.quantity * item.unitCost) ?? 0), 0);
+  const serviceMaterialRealCost = serviceMaterials.reduce(
+  (sum, item) =>
+    sum + Number(item.costSubtotal ?? (item.quantity * item.unitCost)),
+  0
+);
   const serviceMaterialMargin = serviceMaterialCost - serviceMaterialRealCost;
   const selectedQuoteOrder = orders.find((o) => o.id === quoteOrderId);
 
