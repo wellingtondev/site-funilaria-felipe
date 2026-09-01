@@ -6,6 +6,9 @@ service cloud.firestore {
     match /customers/{document=**} { allow read, write: if isAdmin(); }
     match /vehicles/{document=**} { allow read, write: if isAdmin(); }
     match /serviceOrders/{document=**} { allow read, write: if isAdmin(); }
+    match /purchaseOrders/{document=**} { allow read, write: if isAdmin(); }
+    match /products/{document=**} { allow read, write: if isAdmin(); }
+    match /operatingExpenses/{document=**} { allow read, write: if isAdmin(); }
 
     match /publicTracking/{token} {
       allow get: if true;
