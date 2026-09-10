@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CarFront, Paintbrush, ShieldCheck, ShoppingBag, Sparkles, TimerReset, WandSparkles } from "lucide-react";
+import HeroInteractiveVisual from "../components/HeroInteractiveVisual";
 
 const services = [
   { icon: CarFront, title: "Funilaria", text: "Reparos de amassados, para-choques, peças e recuperação da carroceria com acabamento preciso." },
@@ -23,11 +24,7 @@ export default function Home() {
             </div>
             <div className="hero-points"><span><BadgeCheck size={18}/> Atendimento direto</span><span><TimerReset size={18}/> Agilidade</span><span><ShieldCheck size={18}/> Cuidado em cada detalhe</span></div>
           </div>
-          <div className="hero-visual" aria-label="Felipe Auto Design">
-            <div className="visual-glow" />
-            <img src="/logo-felipe-auto-design.jpg" alt="Logo Felipe Auto Design" />
-            <div className="spray-line" />
-          </div>
+          <HeroInteractiveVisual />
         </div>
       </section>
 
