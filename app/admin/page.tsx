@@ -862,6 +862,8 @@ export default function AdminPage() {
 
   <div class="signature"><div>Assinatura do cliente</div><div>Felipe Auto Design</div></div>
   <footer class="footer"><b>Felipe Auto Design</b><br/>Avenida Alfredo de Faria, 87 - Tutunas - Uberaba/MG<br/>(34) 99154-3776 • @felipeautodesign • www.felipeautodesign.com.br</footer>
+  <footer class="footer"><b>CNPJ: 52.198.532/0001-89</b>
+  <footer class="footer"><b>Orçamento válido até 30 dias.</b>
 </div>
 <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
 </body>
