@@ -19,6 +19,7 @@ export default function Header() {
         <nav className={open ? "nav-links open" : "nav-links"}>
           <Link href="/" onClick={() => setOpen(false)}>Início</Link>
           <a href="/#servicos" onClick={() => setOpen(false)}>Serviços</a>
+          <Link href="/loja" onClick={() => setOpen(false)}>Loja</Link>
           <Link href="/orcamento" onClick={() => setOpen(false)}>Faça seu orçamento</Link>
           <Link href="/parceiro" onClick={() => setOpen(false)}>Seja um parceiro</Link>
           <a className="nav-cta" href="https://wa.me/5534991543776" target="_blank" rel="noreferrer">WhatsApp</a>

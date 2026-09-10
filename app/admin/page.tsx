@@ -19,6 +19,8 @@ import {
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   Car,
   ClipboardList,
   Copy,
@@ -30,6 +32,7 @@ import {
   ReceiptText,
   RefreshCw,
   ShoppingCart,
+  BadgeDollarSign,
   Trash2,
   WalletCards,
   Users,
@@ -45,16 +48,26 @@ import {
   ServiceMaterialItem,
   ServiceOrder,
   ServiceStatus,
+  StoreCatalogProduct,
+  StoreOrder,
   Vehicle,
 } from "@/lib/office-types";
 import OfficeCalendar from "@/components/admin/OfficeCalendar";
 
-type Tab = "resumo" | "clientes" | "veiculos" | "servicos" | "agenda" | "produtos" | "compras" | "orcamentos" | "fechamento";
+type Tab = "resumo" | "clientes" | "veiculos" | "servicos" | "agenda" | "produtos" | "compras" | "vendas" | "orcamentos" | "fechamento";
 
 const money = (value: number) =>
   Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const dateBR = (value?: string) => (value ? value.split("-").reverse().join("/") : "-");
+
+const todayLocal = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -66,6 +79,10 @@ export default function AdminPage() {
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [expenses, setExpenses] = useState<MonthlyExpense[]>([]);
+  const [storeCatalog, setStoreCatalog] = useState<StoreCatalogProduct[]>([]);
+  const [storeOrders, setStoreOrders] = useState<StoreOrder[]>([]);
+  const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
+  const [storeDrafts, setStoreDrafts] = useState<Record<string, { active: boolean; salePrice: string; promotionEnabled: boolean; promotionPrice: string; promotionLabel: string; imageUrl: string }>>({});
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
@@ -105,13 +122,15 @@ export default function AdminPage() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [cSnap, vSnap, oSnap, pSnap, productSnap, expenseSnap] = await Promise.all([
+      const [cSnap, vSnap, oSnap, pSnap, productSnap, expenseSnap, storeSnap, storeOrderSnap] = await Promise.all([
         getDocs(query(collection(db, "customers"), orderBy("name"))),
         getDocs(query(collection(db, "vehicles"), orderBy("plate"))),
         getDocs(query(collection(db, "serviceOrders"), orderBy("scheduledDate", "desc"))),
         getDocs(query(collection(db, "purchaseOrders"), orderBy("purchaseDate", "desc"))),
         getDocs(query(collection(db, "products"), orderBy("name"))),
         getDocs(query(collection(db, "operatingExpenses"), orderBy("expenseDate", "desc"))),
+        getDocs(collection(db, "storeCatalog")),
+        getDocs(collection(db, "storeOrders")),
       ]);
       setCustomers(cSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Customer)));
       setVehicles(vSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Vehicle)));
@@ -119,6 +138,25 @@ export default function AdminPage() {
       setPurchases(pSnap.docs.map((d) => ({ id: d.id, ...d.data() } as PurchaseOrder)));
       setProducts(productSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
       setExpenses(expenseSnap.docs.map((d) => ({ id: d.id, ...d.data() } as MonthlyExpense)));
+      const catalogItems = storeSnap.docs.map((d) => ({ id: d.id, ...d.data() } as StoreCatalogProduct));
+      setStoreCatalog(catalogItems);
+      const saleOrders = storeOrderSnap.docs.map((d) => ({ id: d.id, ...d.data() } as StoreOrder)).sort((a, b) => String(b.orderDate || "").localeCompare(String(a.orderDate || "")));
+      setStoreOrders(saleOrders);
+      const drafts: Record<string, { active: boolean; salePrice: string; promotionEnabled: boolean; promotionPrice: string; promotionLabel: string; imageUrl: string }> = {};
+      productSnap.docs.forEach((d) => {
+        const product = { id: d.id, ...d.data() } as Product;
+        const catalog = catalogItems.find((item) => item.productId === product.id || item.id === product.id);
+        const suggested = Number(product.avgUnitCost ?? product.lastEffectiveUnitCost ?? product.lastUnitCost ?? 0) * (1 + Number(product.defaultMarkupPercent ?? 20) / 100);
+        drafts[product.id] = {
+          active: Boolean(catalog?.active),
+          salePrice: catalog?.salePrice ? String(catalog.salePrice) : suggested > 0 ? suggested.toFixed(2) : "",
+          promotionEnabled: Boolean(catalog?.promotionEnabled),
+          promotionPrice: catalog?.promotionPrice ? String(catalog.promotionPrice) : "",
+          promotionLabel: catalog?.promotionLabel || "Oferta",
+          imageUrl: catalog?.imageUrl || "",
+        };
+      });
+      setStoreDrafts(drafts);
     } finally {
       setLoading(false);
     }
@@ -171,7 +209,14 @@ export default function AdminPage() {
   const monthRevenue = monthLaborRevenue + monthMaterialRevenue;
   const monthPurchaseCost = monthPurchases.reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
   const monthOperatingCost = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const monthNetProfit = monthRevenue - monthPurchaseCost - monthOperatingCost;
+  const confirmedStoreOrders = storeOrders.filter((order) => order.status === "Confirmado");
+  const pendingStoreOrders = storeOrders.filter((order) => order.status === "Pendente");
+  const monthStoreOrders = confirmedStoreOrders.filter((order) => Boolean((order.confirmedAt || order.orderDate)?.startsWith(closingMonth)));
+  const monthStoreRevenue = monthStoreOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+  const monthStoreCost = monthStoreOrders.reduce((sum, order) => sum + Number(order.costAmount || 0), 0);
+  const monthStoreProfit = monthStoreRevenue - monthStoreCost;
+  const monthTotalRevenue = monthRevenue + monthStoreRevenue;
+  const monthNetProfit = monthTotalRevenue - monthPurchaseCost - monthOperatingCost;
 
   function resetCustomerForm() {
     setEditingCustomerId(null);
@@ -418,6 +463,7 @@ export default function AdminPage() {
       const stockDelta = oldQty - newQty;
       if (stockDelta !== 0) {
         batch.update(doc(db, "products", productId), { stockCurrent: increment(stockDelta), updatedAt: serverTimestamp() });
+        batch.set(doc(db, "storeCatalog", productId), { stockCurrent: increment(stockDelta), updatedAt: serverTimestamp() }, { merge: true });
       }
     });
 
@@ -437,6 +483,10 @@ export default function AdminPage() {
         stockCurrent: increment(Number(item.quantity || 0)),
         updatedAt: serverTimestamp(),
       });
+      batch.set(doc(db, "storeCatalog", item.productId), {
+        stockCurrent: increment(Number(item.quantity || 0)),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
     });
     await batch.commit();
     if (editingOrderId === order.id) resetOrderForm();
@@ -446,16 +496,65 @@ export default function AdminPage() {
 
   async function addProduct(e: FormEvent) {
     e.preventDefault();
-    await addDoc(collection(db, "products"), {
+    const batch = writeBatch(db);
+    const productRef = doc(collection(db, "products"));
+    const stockCurrent = Number(productForm.stockCurrent || 0);
+    batch.set(productRef, {
       name: productForm.name,
       category: productForm.category,
       unit: productForm.unit,
-      stockCurrent: Number(productForm.stockCurrent || 0),
+      stockCurrent,
       defaultMarkupPercent: Math.max(0, Number(productForm.defaultMarkupPercent || 0)),
       createdAt: serverTimestamp(),
     });
+    batch.set(doc(db, "storeCatalog", productRef.id), {
+      productId: productRef.id,
+      name: productForm.name,
+      category: productForm.category,
+      unit: productForm.unit,
+      stockCurrent,
+      salePrice: 0,
+      active: false,
+      promotionEnabled: false,
+      promotionPrice: 0,
+      promotionLabel: "Oferta",
+      imageUrl: "",
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
     setProductForm({ name: "", category: "", unit: "un", stockCurrent: "0", defaultMarkupPercent: "20" });
     setNotice("Produto cadastrado com sucesso.");
+    await loadAll();
+  }
+
+  async function saveStoreProduct(product: Product) {
+    const draft = storeDrafts[product.id];
+    if (!draft) return;
+    const salePrice = Number(draft.salePrice || 0);
+    const promotionPrice = Number(draft.promotionPrice || 0);
+    if (draft.active && salePrice <= 0) {
+      setNotice(`Informe o preço de venda de ${product.name} antes de publicar na loja.`);
+      return;
+    }
+    if (draft.promotionEnabled && (promotionPrice <= 0 || promotionPrice >= salePrice)) {
+      setNotice(`O preço promocional de ${product.name} deve ser maior que zero e menor que o preço normal.`);
+      return;
+    }
+    await setDoc(doc(db, "storeCatalog", product.id), {
+      productId: product.id,
+      name: product.name,
+      category: product.category || "",
+      unit: product.unit || "un",
+      stockCurrent: Number(product.stockCurrent || 0),
+      salePrice,
+      active: draft.active,
+      promotionEnabled: draft.promotionEnabled,
+      promotionPrice: draft.promotionEnabled ? promotionPrice : 0,
+      promotionLabel: draft.promotionLabel || "Oferta",
+      imageUrl: draft.imageUrl.trim(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    setNotice(`${product.name} atualizado na loja.`);
     await loadAll();
   }
 
@@ -494,6 +593,22 @@ export default function AdminPage() {
 
   function removePurchaseItem(productId: string) {
     setPurchaseItems((items) => items.filter((item) => item.productId !== productId));
+  }
+
+  function toggleProductDetails(productId: string) {
+    setExpandedProducts((current) => ({
+      ...current,
+      [productId]: !current[productId],
+    }));
+  }
+
+  function setAllProductsExpanded(expanded: boolean) {
+    setExpandedProducts(
+      products.reduce<Record<string, boolean>>((acc, product) => {
+        acc[product.id] = expanded;
+        return acc;
+      }, {})
+    );
   }
 
   async function addPurchase(e: FormEvent) {
@@ -544,6 +659,14 @@ export default function AdminPage() {
         stockCurrent: newStock,
         updatedAt: serverTimestamp(),
       });
+      batch.set(doc(db, "storeCatalog", item.productId), {
+        productId: item.productId,
+        name: product.name,
+        category: product.category || "",
+        unit: product.unit || "un",
+        stockCurrent: newStock,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
     });
 
     await batch.commit();
@@ -568,6 +691,7 @@ export default function AdminPage() {
     batch.delete(doc(db, "purchaseOrders", id));
     purchase?.items?.forEach((item) => {
       batch.update(doc(db, "products", item.productId), { stockCurrent: increment(-Number(item.quantity || 0)), updatedAt: serverTimestamp() });
+      batch.set(doc(db, "storeCatalog", item.productId), { stockCurrent: increment(-Number(item.quantity || 0)), updatedAt: serverTimestamp() }, { merge: true });
     });
     await batch.commit();
     setNotice("Compra removida e estoque estornado.");
@@ -580,9 +704,73 @@ export default function AdminPage() {
       setNotice("Informe um estoque válido para o produto.");
       return;
     }
-    await updateDoc(doc(db, "products", product.id), { stockCurrent: Number(raw), updatedAt: serverTimestamp() });
+    const newStock = Number(raw);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "products", product.id), { stockCurrent: newStock, updatedAt: serverTimestamp() });
+    batch.set(doc(db, "storeCatalog", product.id), {
+      productId: product.id,
+      name: product.name,
+      category: product.category || "",
+      unit: product.unit || "un",
+      stockCurrent: newStock,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await batch.commit();
     setStockEdits((current) => ({ ...current, [product.id]: "" }));
     setNotice(`Estoque de ${product.name} atualizado.`);
+    await loadAll();
+  }
+
+  async function confirmStoreOrder(order: StoreOrder) {
+    if (order.status !== "Pendente") return;
+    const unavailable = order.items.find((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      return !product || Number(product.stockCurrent || 0) < Number(item.quantity || 0);
+    });
+    if (unavailable) {
+      const product = products.find((p) => p.id === unavailable.productId);
+      setNotice(`Estoque insuficiente para ${unavailable.productName}. Disponível: ${Number(product?.stockCurrent || 0).toLocaleString("pt-BR")}.`);
+      return;
+    }
+    if (!window.confirm(`Confirmar a venda de ${money(order.totalAmount)} para ${order.customerName}? O estoque será baixado agora.`)) return;
+
+    const batch = writeBatch(db);
+    let costAmount = 0;
+    const itemsWithCost = order.items.map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      const unitCost = Number(product?.avgUnitCost ?? product?.lastEffectiveUnitCost ?? product?.lastUnitCost ?? 0);
+      const costSubtotal = unitCost * Number(item.quantity || 0);
+      costAmount += costSubtotal;
+      batch.update(doc(db, "products", item.productId), {
+        stockCurrent: increment(-Number(item.quantity || 0)),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, "storeCatalog", item.productId), {
+        stockCurrent: increment(-Number(item.quantity || 0)),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      return { ...item, unitCost, costSubtotal };
+    });
+
+    const confirmedAt = todayLocal();
+    batch.update(doc(db, "storeOrders", order.id), {
+      status: "Confirmado",
+      confirmedAt,
+      items: itemsWithCost,
+      costAmount,
+      profitAmount: Number(order.totalAmount || 0) - costAmount,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    setNotice(`Venda confirmada. Estoque baixado e ${money(order.totalAmount)} incluído no fechamento.`);
+    await loadAll();
+  }
+
+  async function cancelStoreOrder(order: StoreOrder) {
+    if (order.status !== "Pendente") return;
+    if (!window.confirm(`Cancelar o pedido de ${order.customerName}?`)) return;
+    await updateDoc(doc(db, "storeOrders", order.id), { status: "Cancelado", updatedAt: serverTimestamp() });
+    setNotice("Pedido cancelado. Nenhuma alteração foi feita no estoque.");
     await loadAll();
   }
 
@@ -703,18 +891,21 @@ export default function AdminPage() {
       <section className="container admin-shell">
         {notice && <div className="admin-notice" onClick={() => setNotice("")}>{notice}</div>}
 
-        <nav className="admin-tabs">
+        <div className="admin-workspace">
+        <nav className="admin-tabs" aria-label="Navegação do painel">
           <button className={tab === "resumo" ? "active" : ""} onClick={() => setTab("resumo")}><ClipboardList size={17} />Resumo</button>
           <button className={tab === "clientes" ? "active" : ""} onClick={() => setTab("clientes")}><Users size={17} />Clientes</button>
           <button className={tab === "veiculos" ? "active" : ""} onClick={() => setTab("veiculos")}><Car size={17} />Veículos</button>
           <button className={tab === "servicos" ? "active" : ""} onClick={() => setTab("servicos")}><Plus size={17} />Serviços</button>
           <button className={tab === "produtos" ? "active" : ""} onClick={() => setTab("produtos")}><Package size={17} />Produtos</button>
           <button className={tab === "compras" ? "active" : ""} onClick={() => setTab("compras")}><ShoppingCart size={17} />Compras</button>
+          <button className={tab === "vendas" ? "active" : ""} onClick={() => setTab("vendas")}><BadgeDollarSign size={17} />Vendas{pendingStoreOrders.length > 0 ? ` (${pendingStoreOrders.length})` : ""}</button>
           <button className={tab === "orcamentos" ? "active" : ""} onClick={() => setTab("orcamentos")}><ReceiptText size={17} />Orçamentos</button>
           <button className={tab === "fechamento" ? "active" : ""} onClick={() => setTab("fechamento")}><WalletCards size={17} />Fechamento</button>
           <button className={tab === "agenda" ? "active" : ""} onClick={() => setTab("agenda")}><CalendarDays size={17} />Agenda</button>
         </nav>
 
+        <div className="admin-content">
         {loading ? <div className="admin-loading">Carregando dados...</div> : <>
           {tab === "resumo" && <div>
             <div className="admin-kpis admin-kpis-five">
@@ -799,10 +990,13 @@ export default function AdminPage() {
             </form>
 
             <div className="admin-card">
-              <div className="product-list-head"><div><h2>Produtos cadastrados</h2><p className="admin-muted">{products.length} produto(s) no catálogo</p></div></div>
+              <div className="product-list-head product-list-toolbar"><div><h2>Produtos cadastrados</h2><p className="admin-muted">{products.length} produto(s) no catálogo</p></div>{products.length > 0 && <div className="product-expand-actions"><button type="button" className="admin-secondary" onClick={() => setAllProductsExpanded(true)}>Expandir todos</button><button type="button" className="admin-secondary" onClick={() => setAllProductsExpanded(false)}>Minimizar todos</button></div>}</div>
               <div className="admin-list product-list">
-                {products.length === 0 ? <p className="admin-muted">Nenhum produto cadastrado.</p> : products.map((product) => <article key={product.id}>
-                  <div className="product-title-row"><div><b>{product.name}</b><span>{product.category || "Sem categoria"} • {product.unit || "un"}</span></div><strong>{product.avgUnitCost != null ? money(product.avgUnitCost) : product.lastUnitCost != null ? money(product.lastUnitCost) : "Sem compra"}</strong></div>
+                {products.length === 0 ? <p className="admin-muted">Nenhum produto cadastrado.</p> : products.map((product) => { const isExpanded = Boolean(expandedProducts[product.id]); return <article key={product.id} className={`product-collapsible ${isExpanded ? "is-expanded" : "is-collapsed"}`}>
+                  <button type="button" className="product-collapse-trigger" onClick={() => toggleProductDetails(product.id)} aria-expanded={isExpanded}>
+                    <div className="product-title-row"><div><b>{product.name}</b><span>{product.category || "Sem categoria"} • estoque {Number(product.stockCurrent || 0).toLocaleString("pt-BR")} {product.unit || "un"}</span></div><div className="product-title-value"><strong>{product.avgUnitCost != null ? money(product.avgUnitCost) : product.lastUnitCost != null ? money(product.lastUnitCost) : "Sem compra"}</strong>{isExpanded ? <ChevronUp size={19} /> : <ChevronDown size={19} />}</div></div>
+                  </button>
+                  {isExpanded && <div className="product-collapsible-content">
                   <div className="product-last-cost"><span>Custo médio atual</span><small>{product.avgUnitCost != null ? `${money(product.avgUnitCost)} por ${product.unit || "un"}` : "Será calculado após a primeira compra"}</small></div>
                   <div className="product-last-cost"><span>Acréscimo padrão</span><small>{Number(product.defaultMarkupPercent ?? 20).toLocaleString("pt-BR")}% • preço sugerido {product.avgUnitCost != null ? money(product.avgUnitCost * (1 + Number(product.defaultMarkupPercent ?? 20) / 100)) : "após a primeira compra"}</small></div>
                   <div className="product-last-cost"><span>Última compra</span><small>{product.lastPurchaseDate ? `${dateBR(product.lastPurchaseDate)}${product.lastSupplier ? ` • ${product.lastSupplier}` : ""}${product.lastEffectiveUnitCost != null ? ` • custo c/ frete ${money(product.lastEffectiveUnitCost)}` : ""}` : "Ainda não comprado"}</small></div>
@@ -811,7 +1005,24 @@ export default function AdminPage() {
                     <div><span>Estoque atual</span><strong>{Number(product.stockCurrent || 0).toLocaleString("pt-BR")} {product.unit || "un"}</strong></div>
                     <div className="stock-edit"><input type="number" min="0" step="0.01" placeholder="Novo estoque" value={stockEdits[product.id] ?? ""} onChange={(e) => setStockEdits((current) => ({ ...current, [product.id]: e.target.value }))} /><button type="button" onClick={() => setProductStock(product)}>Atualizar</button></div>
                   </div>
-                </article>)}
+                  <div className="store-product-box">
+                    <div className="store-product-head">
+                      <div><span>Loja online</span><small>Defina preço de venda e destaque promocional. O estoque é sincronizado automaticamente.</small></div>
+                      <label className="store-toggle"><input type="checkbox" checked={Boolean(storeDrafts[product.id]?.active)} onChange={(e) => setStoreDrafts((current) => ({ ...current, [product.id]: { ...(current[product.id] || { salePrice: "", promotionEnabled: false, promotionPrice: "", promotionLabel: "Oferta", imageUrl: "" }), active: e.target.checked } }))} /><span>Publicar</span></label>
+                    </div>
+                    <div className="admin-form-row">
+                      <label><span>Preço de venda (R$)</span><input type="number" min="0" step="0.01" value={storeDrafts[product.id]?.salePrice ?? ""} onChange={(e) => setStoreDrafts((current) => ({ ...current, [product.id]: { ...(current[product.id] || { active: false, promotionEnabled: false, promotionPrice: "", promotionLabel: "Oferta", imageUrl: "" }), salePrice: e.target.value } }))} placeholder="Ex.: 49,90" /></label>
+                      <label><span>Imagem do produto (URL)</span><input value={storeDrafts[product.id]?.imageUrl ?? ""} onChange={(e) => setStoreDrafts((current) => ({ ...current, [product.id]: { ...(current[product.id] || { active: false, salePrice: "", promotionEnabled: false, promotionPrice: "", promotionLabel: "Oferta" }), imageUrl: e.target.value } }))} placeholder="https://..." /></label>
+                    </div>
+                    <div className="store-promo-row">
+                      <label className="store-toggle"><input type="checkbox" checked={Boolean(storeDrafts[product.id]?.promotionEnabled)} onChange={(e) => setStoreDrafts((current) => ({ ...current, [product.id]: { ...(current[product.id] || { active: false, salePrice: "", promotionPrice: "", promotionLabel: "Oferta", imageUrl: "" }), promotionEnabled: e.target.checked } }))} /><span>Destacar promoção</span></label>
+                      <label><span>Preço promocional (R$)</span><input type="number" min="0" step="0.01" disabled={!storeDrafts[product.id]?.promotionEnabled} value={storeDrafts[product.id]?.promotionPrice ?? ""} onChange={(e) => setStoreDrafts((current) => ({ ...current, [product.id]: { ...(current[product.id] || { active: false, salePrice: "", promotionEnabled: true, promotionLabel: "Oferta", imageUrl: "" }), promotionPrice: e.target.value } }))} placeholder="Ex.: 39,90" /></label>
+                      <label><span>Texto do destaque</span><input disabled={!storeDrafts[product.id]?.promotionEnabled} value={storeDrafts[product.id]?.promotionLabel ?? "Oferta"} onChange={(e) => setStoreDrafts((current) => ({ ...current, [product.id]: { ...(current[product.id] || { active: false, salePrice: "", promotionEnabled: true, promotionPrice: "", imageUrl: "" }), promotionLabel: e.target.value } }))} placeholder="Oferta / Semana do cliente" /></label>
+                    </div>
+                    <button type="button" className="admin-secondary store-save-button" onClick={() => saveStoreProduct(product)}><ShoppingCart size={16} /> Salvar na loja</button>
+                  </div>
+                  </div>}
+                </article>})}
               </div>
             </div>
           </div>}
@@ -854,6 +1065,30 @@ export default function AdminPage() {
             </div>
           </div>}
 
+          {tab === "vendas" && <div className="sales-page">
+            <div className="admin-kpis sales-kpis">
+              <article><span>Pedidos pendentes</span><strong>{pendingStoreOrders.length}</strong></article>
+              <article><span>Vendas confirmadas</span><strong>{confirmedStoreOrders.length}</strong></article>
+              <article><span>Faturamento em vendas</span><strong>{money(confirmedStoreOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0))}</strong></article>
+              <article><span>Lucro bruto estimado</span><strong>{money(confirmedStoreOrders.reduce((sum, order) => sum + Number(order.profitAmount || 0), 0))}</strong></article>
+            </div>
+
+            <div className="admin-card sales-section">
+              <div className="sales-section-head"><div><h2>Pedidos da loja</h2><p className="admin-muted">Pedidos enviados pelo site aparecem aqui. Confirme somente após combinar pagamento/retirada com o cliente.</p></div></div>
+              <div className="sales-list">
+                {storeOrders.length === 0 ? <p className="admin-muted">Nenhum pedido recebido pela loja.</p> : storeOrders.map((order) => {
+                  const statusClass = order.status === "Confirmado" ? "confirmed" : order.status === "Cancelado" ? "cancelled" : "pending";
+                  return <article key={order.id} className={`sale-order ${statusClass}`}>
+                    <div className="sale-order-head"><div><span className={`sale-status ${statusClass}`}>{order.status}</span><b>Pedido #{order.id.slice(0, 8).toUpperCase()}</b><small>{dateBR(order.orderDate)} • {order.customerName} • {order.customerPhone}</small></div><strong>{money(order.totalAmount)}</strong></div>
+                    <div className="sale-items">{order.items?.map((item) => <div key={`${order.id}-${item.productId}`}><span>{item.quantity}x {item.productName}</span><b>{money(item.subtotal)}</b></div>)}</div>
+                    {order.status === "Confirmado" && <div className="sale-profit"><span>Custo estimado: {money(Number(order.costAmount || 0))}</span><strong>Lucro bruto: {money(Number(order.profitAmount || 0))}</strong></div>}
+                    {order.status === "Pendente" && <div className="sale-actions"><button type="button" className="admin-primary" onClick={() => confirmStoreOrder(order)}>Confirmar venda e baixar estoque</button><button type="button" className="admin-secondary" onClick={() => cancelStoreOrder(order)}>Cancelar pedido</button></div>}
+                  </article>;
+                })}
+              </div>
+            </div>
+          </div>}
+
           {tab === "orcamentos" && <div className="admin-two-cols quote-layout">
             <div className="admin-card admin-form">
               <h2>Gerar orçamento em PDF</h2>
@@ -871,16 +1106,16 @@ export default function AdminPage() {
           </div>}
 
           {tab === "fechamento" && <div className="closing-page">
-            <div className="closing-toolbar admin-card"><div><h2>Fechamento do mês</h2><p className="admin-muted">Resultado em regime de caixa: serviços entregues no mês menos compras de materiais e custos operacionais lançados.</p></div><label><span>Mês de referência</span><input type="month" value={closingMonth} onChange={(e) => setClosingMonth(e.target.value)} /></label></div>
+            <div className="closing-toolbar admin-card"><div><h2>Fechamento do mês</h2><p className="admin-muted">Resultado em regime de caixa: serviços entregues + vendas confirmadas no mês, menos compras de materiais e custos operacionais lançados.</p></div><label><span>Mês de referência</span><input type="month" value={closingMonth} onChange={(e) => setClosingMonth(e.target.value)} /></label></div>
 
             <div className="admin-kpis closing-kpis">
               <article><span>Serviços entregues</span><strong>{monthOrders.length}</strong></article>
               <article><span>Mão de obra faturada</span><strong>{money(monthLaborRevenue)}</strong></article>
               <article><span>Materiais faturados</span><strong>{money(monthMaterialRevenue)}</strong></article>
-              <article><span>Faturamento</span><strong>{money(monthRevenue)}</strong></article>
+              <article><span>Serviços faturados</span><strong>{money(monthRevenue)}</strong></article><article><span>Vendas da loja</span><strong>{money(monthStoreRevenue)}</strong><small>Lucro bruto {money(monthStoreProfit)}</small></article><article><span>Faturamento total</span><strong>{money(monthTotalRevenue)}</strong></article>
               <article><span>Compras de materiais</span><strong className="negative-value">- {money(monthPurchaseCost)}</strong></article>
               <article><span>Custos operacionais</span><strong className="negative-value">- {money(monthOperatingCost)}</strong></article>
-              <article className="profit-kpi"><span>Lucro líquido (caixa)</span><strong className={monthNetProfit >= 0 ? "positive-value" : "negative-value"}>{money(monthNetProfit)}</strong><small>Margem {monthRevenue > 0 ? `${((monthNetProfit / monthRevenue) * 100).toFixed(1)}%` : "0%"}</small></article>
+              <article className="profit-kpi"><span>Lucro líquido (caixa)</span><strong className={monthNetProfit >= 0 ? "positive-value" : "negative-value"}>{money(monthNetProfit)}</strong><small>Margem {monthTotalRevenue > 0 ? `${((monthNetProfit / monthTotalRevenue) * 100).toFixed(1)}%` : "0%"}</small></article>
             </div>
 
             <div className="admin-two-cols closing-layout">
@@ -896,11 +1131,14 @@ export default function AdminPage() {
             </div>
 
             <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} /></div>
+            <div className="admin-card closing-section"><h2>Vendas da loja no mês</h2><div className="admin-list purchase-list">{monthStoreOrders.length === 0 ? <p className="admin-muted">Nenhuma venda da loja confirmada neste mês.</p> : monthStoreOrders.map((order) => <article key={order.id}><div className="purchase-line"><div><b>{order.customerName}</b><span>{dateBR(order.confirmedAt || order.orderDate)} • Pedido #{order.id.slice(0, 8).toUpperCase()}</span></div><strong>{money(order.totalAmount)}</strong></div><small>{order.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ")}</small><div className="sale-profit inline"><span>Custo {money(Number(order.costAmount || 0))}</span><strong>Lucro bruto {money(Number(order.profitAmount || 0))}</strong></div></article>)}</div></div>
             <div className="admin-card closing-section"><h2>Compras de materiais do mês</h2><div className="admin-list purchase-list">{monthPurchases.length === 0 ? <p className="admin-muted">Nenhuma compra de material neste mês.</p> : monthPurchases.map((p) => <article key={p.id}><div className="purchase-line"><div><b>{p.supplier}</b><span>{dateBR(p.purchaseDate)} {p.invoiceNumber ? `• NF ${p.invoiceNumber}` : ""}</span></div><strong>{money(p.totalAmount)}</strong></div><small>{p.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ") || p.products || "Produtos não detalhados"}</small></article>)}</div></div>
           </div>}
 
           {tab === "agenda" && <OfficeCalendar orders={orders} customers={customers} vehicles={vehicles} />}
         </>}
+        </div>
+        </div>
       </section>
     </main>
   );

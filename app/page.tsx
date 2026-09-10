@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, CarFront, Paintbrush, ShieldCheck, Sparkles, TimerReset, WandSparkles } from "lucide-react";
+import { ArrowRight, BadgeCheck, CarFront, Paintbrush, ShieldCheck, ShoppingBag, Sparkles, TimerReset, WandSparkles } from "lucide-react";
 
 const services = [
   { icon: CarFront, title: "Funilaria", text: "Reparos de amassados, para-choques, peças e recuperação da carroceria com acabamento preciso." },
@@ -46,10 +46,17 @@ export default function Home() {
       </section>
 
       <section className="section">
+        <div className="container store-home-banner">
+          <div><span className="eyebrow">LOJA FELIPE AUTO DESIGN</span><h2>Produtos automotivos disponíveis em estoque.</h2><p>Escolha seus produtos, monte o pedido e fale com a gente direto pelo WhatsApp.</p></div>
+          <Link className="btn primary" href="/loja">Ir para a loja <ShoppingBag size={18}/></Link>
+        </div>
+      </section>
+
+      <section className="section">
         <div className="container partner-banner"><div><span className="eyebrow">PARA LOJISTAS E EMPRESAS</span><h2>Precisa de uma funilaria parceira para o seu giro de veículos?</h2><p>Converse conosco sobre atendimento recorrente para lojas, frotas e parceiros comerciais.</p></div><Link className="btn primary" href="/parceiro">Conhecer parceria <ArrowRight size={18}/></Link><WandSparkles className="banner-icon"/></div>
       </section>
 
-      <section className="section contact-strip"><div className="container contact-content"><div><span>FELIPE AUTO DESIGN</span><h2>Vamos cuidar do seu carro?</h2><p>Avenida Alfredo de Faria, 87 - Tutunas - UBERABA/MG</p></div><Link href="/orcamento" className="btn light">Solicitar orçamento <ArrowRight size={18}/></Link></div></section>
+      <section className="section contact-strip"><div className="container contact-content"><div><span>FELIPE AUTO DESIGN</span><h2>Vamos cuidar do seu carro?</h2><p>Avenida Alfredo de Faria, 87 - Tutunas</p></div><Link href="/orcamento" className="btn light">Solicitar orçamento <ArrowRight size={18}/></Link></div></section>
     </main>
   );
 }

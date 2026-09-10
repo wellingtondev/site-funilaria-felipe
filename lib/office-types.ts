@@ -128,3 +128,47 @@ export interface MonthlyExpense {
   amount: number;
   expenseDate: string;
 }
+
+export interface StoreCatalogProduct {
+  id: string;
+  productId: string;
+  name: string;
+  category?: string;
+  unit?: string;
+  stockCurrent: number;
+  salePrice: number;
+  active: boolean;
+  promotionEnabled?: boolean;
+  promotionPrice?: number;
+  promotionLabel?: string;
+  imageUrl?: string;
+}
+
+
+export type StoreOrderStatus = "Pendente" | "Confirmado" | "Cancelado";
+
+export interface StoreOrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  unitCost?: number;
+  costSubtotal?: number;
+}
+
+export interface StoreOrder {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  items: StoreOrderItem[];
+  totalAmount: number;
+  costAmount?: number;
+  profitAmount?: number;
+  status: StoreOrderStatus;
+  orderDate: string;
+  confirmedAt?: string;
+  paymentMethod?: string;
+  notes?: string;
+  createdAt?: unknown;
+}

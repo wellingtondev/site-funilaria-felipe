@@ -10,6 +10,19 @@ service cloud.firestore {
     match /products/{document=**} { allow read, write: if isAdmin(); }
     match /operatingExpenses/{document=**} { allow read, write: if isAdmin(); }
 
+    // Catálogo público sanitizado: não expõe custos, fornecedor ou dados internos.
+    match /storeCatalog/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // Pedidos enviados pela loja pública. O cliente só pode criar; gestão fica autenticada.
+    match /storeOrders/{orderId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     match /publicTracking/{token} {
       allow get: if true;
       allow list: if false;
