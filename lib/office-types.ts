@@ -77,6 +77,8 @@ export interface ServiceOrder {
   notes?: string;
   publicToken: string;
   completedAt?: string;
+  /** Situação do pagamento do serviço. */
+  paymentStatus?: "Pago" | "Não pago";
 }
 
 export interface Product {
