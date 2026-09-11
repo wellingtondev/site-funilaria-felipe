@@ -638,3 +638,6 @@ input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); opac
     width:100%;
   }
 }
+
+/* Status de pagamento dos serviços */
+.payment-badge{display:inline-flex;align-items:center;justify-content:center;min-width:88px;padding:8px 11px;border-radius:999px;font-size:.76rem;font-weight:900;white-space:nowrap;cursor:pointer;transition:transform .15s ease,filter .15s ease;border:1px solid transparent}.payment-badge:hover{filter:brightness(1.12)}.payment-badge:active{transform:scale(.97)}.payment-badge.paid{background:#102b1a;border-color:#245a36;color:#65d58b}.payment-badge.unpaid{background:#2b1717;border-color:#713232;color:#ff9f9f}

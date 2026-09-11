@@ -431,6 +431,7 @@ export default function AdminPage() {
       materialItems: serviceMaterials,
       laborCost: Number(orderForm.laborCost || 0),
       status: existingOrder?.status || ("Agendado" as ServiceStatus),
+      paymentStatus: existingOrder?.paymentStatus || "Não pago",
       publicToken: token,
       ...(existingOrder?.completedAt ? { completedAt: existingOrder.completedAt } : {}),
     };
@@ -802,6 +803,13 @@ export default function AdminPage() {
     setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status, completedAt: status === "Entregue" ? (o.completedAt || new Date().toISOString().slice(0, 10)) : undefined } : o)));
   }
 
+
+  async function updatePaymentStatus(order: ServiceOrder, paymentStatus: "Pago" | "Não pago") {
+    await updateDoc(doc(db, "serviceOrders", order.id), { paymentStatus, updatedAt: serverTimestamp() });
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, paymentStatus } : o)));
+    setNotice(`Pagamento de ${customerName(order.customerId)} atualizado para ${paymentStatus}.`);
+  }
+
   function copyLink(token: string) {
     const url = `${window.location.origin}/acompanhar/${token}`;
     navigator.clipboard.writeText(url);
@@ -862,8 +870,6 @@ export default function AdminPage() {
 
   <div class="signature"><div>Assinatura do cliente</div><div>Felipe Auto Design</div></div>
   <footer class="footer"><b>Felipe Auto Design</b><br/>Avenida Alfredo de Faria, 87 - Tutunas - Uberaba/MG<br/>(34) 99154-3776 • @felipeautodesign • www.felipeautodesign.com.br</footer>
-  <footer class="footer"><b>CNPJ: 52.198.532/0001-89</b>
-  <footer class="footer"><b>Orçamento válido até 30 dias.</b>
 </div>
 <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
 </body>
@@ -918,7 +924,7 @@ export default function AdminPage() {
               <article><span>Última compra</span><strong>{lastPurchase ? money(lastPurchase.totalAmount) : "-"}</strong><small>{lastPurchase ? dateBR(lastPurchase.purchaseDate) : "Sem compras"}</small></article>
             </div>
             <h2 className="admin-section-title">Serviços recentes</h2>
-            <OrderTable orders={orders.slice(0, 8)} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
+            <OrderTable orders={orders.slice(0, 8)} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
           </div>}
 
           {tab === "clientes" && <div className="admin-two-cols">
@@ -975,7 +981,7 @@ export default function AdminPage() {
               <div className="form-action-row"><button className="admin-primary">{editingOrderId ? "Salvar alterações do serviço" : "Agendar serviço e gerar acompanhamento"}</button>{editingOrderId && <button type="button" className="admin-secondary" onClick={resetOrderForm}>Cancelar</button>}</div>
             </form>
             <h2 className="admin-section-title">Ordens de serviço</h2>
-            <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
+            <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
           </div>}
 
           {tab === "produtos" && <div className="admin-two-cols product-layout">
@@ -1132,7 +1138,7 @@ export default function AdminPage() {
               <div className="admin-card"><h2>Custos operacionais</h2><div className="admin-list expense-list">{monthExpenses.length === 0 ? <p className="admin-muted">Nenhum custo operacional lançado neste mês.</p> : monthExpenses.map((expense) => <article key={expense.id}><div className="expense-line"><div><b>{expense.category}</b><span>{expense.description} • {dateBR(expense.expenseDate)}</span></div><strong>{money(expense.amount)}</strong><button type="button" className="danger-icon" onClick={() => removeExpense(expense.id)}><Trash2 size={15} /></button></div></article>)}</div></div>
             </div>
 
-            <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} /></div>
+            <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} /></div>
             <div className="admin-card closing-section"><h2>Vendas da loja no mês</h2><div className="admin-list purchase-list">{monthStoreOrders.length === 0 ? <p className="admin-muted">Nenhuma venda da loja confirmada neste mês.</p> : monthStoreOrders.map((order) => <article key={order.id}><div className="purchase-line"><div><b>{order.customerName}</b><span>{dateBR(order.confirmedAt || order.orderDate)} • Pedido #{order.id.slice(0, 8).toUpperCase()}</span></div><strong>{money(order.totalAmount)}</strong></div><small>{order.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ")}</small><div className="sale-profit inline"><span>Custo {money(Number(order.costAmount || 0))}</span><strong>Lucro bruto {money(Number(order.profitAmount || 0))}</strong></div></article>)}</div></div>
             <div className="admin-card closing-section"><h2>Compras de materiais do mês</h2><div className="admin-list purchase-list">{monthPurchases.length === 0 ? <p className="admin-muted">Nenhuma compra de material neste mês.</p> : monthPurchases.map((p) => <article key={p.id}><div className="purchase-line"><div><b>{p.supplier}</b><span>{dateBR(p.purchaseDate)} {p.invoiceNumber ? `• NF ${p.invoiceNumber}` : ""}</span></div><strong>{money(p.totalAmount)}</strong></div><small>{p.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ") || p.products || "Produtos não detalhados"}</small></article>)}</div></div>
           </div>}
@@ -1151,6 +1157,7 @@ function OrderTable({
   customerName,
   vehicleName,
   onStatus,
+  onPayment,
   onCopy,
   onEdit,
   onDelete,
@@ -1159,9 +1166,10 @@ function OrderTable({
   customerName: (id: string) => string;
   vehicleName: (id: string) => string;
   onStatus: (order: ServiceOrder, status: ServiceStatus) => void;
+  onPayment: (order: ServiceOrder, paymentStatus: "Pago" | "Não pago") => void;
   onCopy: (token: string) => void;
   onEdit: (order: ServiceOrder) => void;
   onDelete: (order: ServiceOrder) => void;
 }) {
-  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Cliente / veículo</th><th>Serviço</th><th>Agenda</th><th>Valores</th><th>Status</th><th>Cliente</th><th>Ações</th></tr></thead><tbody>{orders.length === 0 ? <tr><td colSpan={7}>Nenhum serviço cadastrado.</td></tr> : orders.map((o) => <tr key={o.id}><td><b>{customerName(o.customerId)}</b><small>{vehicleName(o.vehicleId)}</small></td><td>{o.serviceDescription}</td><td><b>{dateBR(o.scheduledDate)}</b><small>Entrega: {dateBR(o.estimatedDelivery)}</small></td><td><b>{money(Number(o.materialCost) + Number(o.laborCost))}</b><small>Material {money(Number(o.materialCost))} • M.O. {money(Number(o.laborCost))}</small></td><td><select value={o.status} onChange={(e) => onStatus(o, e.target.value as ServiceStatus)}>{SERVICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></td><td><button className="copy-link" onClick={() => onCopy(o.publicToken)}><Copy size={15} /> Copiar link</button></td><td><div className="table-actions"><button type="button" className="edit-icon" onClick={() => onEdit(o)} title="Editar serviço"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => onDelete(o)} title="Excluir serviço"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>;
+  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Cliente / veículo</th><th>Serviço</th><th>Agenda</th><th>Valores</th><th>Status</th><th>Pagamento</th><th>Cliente</th><th>Ações</th></tr></thead><tbody>{orders.length === 0 ? <tr><td colSpan={8}>Nenhum serviço cadastrado.</td></tr> : orders.map((o) => <tr key={o.id}><td><b>{customerName(o.customerId)}</b><small>{vehicleName(o.vehicleId)}</small></td><td>{o.serviceDescription}</td><td><b>{dateBR(o.scheduledDate)}</b><small>Entrega: {dateBR(o.estimatedDelivery)}</small></td><td><b>{money(Number(o.materialCost) + Number(o.laborCost))}</b><small>Material {money(Number(o.materialCost))} • M.O. {money(Number(o.laborCost))}</small></td><td><select value={o.status} onChange={(e) => onStatus(o, e.target.value as ServiceStatus)}>{SERVICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></td><td><button type="button" className={`payment-badge ${(o.paymentStatus || "Não pago") === "Pago" ? "paid" : "unpaid"}`} onClick={() => onPayment(o, (o.paymentStatus || "Não pago") === "Pago" ? "Não pago" : "Pago")} title="Clique para alterar o pagamento">{(o.paymentStatus || "Não pago") === "Pago" ? "✓ Pago" : "Não pago"}</button></td><td><button className="copy-link" onClick={() => onCopy(o.publicToken)}><Copy size={15} /> Copiar link</button></td><td><div className="table-actions"><button type="button" className="edit-icon" onClick={() => onEdit(o)} title="Editar serviço"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => onDelete(o)} title="Excluir serviço"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>;
 }
