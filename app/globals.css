@@ -119,7 +119,7 @@
 /* Calendário nativo visível no tema escuro */
 input[type="date"], input[type="month"] { color-scheme: dark; }
 input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 1; cursor: pointer; }
+input[type="month"]::-webkit-calendar-picker-indicator { filter: none; opacity: 1; cursor: pointer; }
 
 
 /* Produtos recolhíveis no painel */
@@ -641,3 +641,9 @@ input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); opac
 
 /* Status de pagamento dos serviços */
 .payment-badge{display:inline-flex;align-items:center;justify-content:center;min-width:88px;padding:8px 11px;border-radius:999px;font-size:.76rem;font-weight:900;white-space:nowrap;cursor:pointer;transition:transform .15s ease,filter .15s ease;border:1px solid transparent}.payment-badge:hover{filter:brightness(1.12)}.payment-badge:active{transform:scale(.97)}.payment-badge.paid{background:#102b1a;border-color:#245a36;color:#65d58b}.payment-badge.unpaid{background:#2b1717;border-color:#713232;color:#ff9f9f}
+
+
+/* Paginação da tela Resumo */
+.summary-services-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-top:26px;margin-bottom:12px}.summary-services-head .admin-section-title{margin:0 0 3px}.summary-record-count,.summary-page-info{color:#969ba1;font-size:.78rem}.summary-page-info{white-space:nowrap}.summary-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px;flex-wrap:wrap}.summary-pagination>.admin-secondary{display:inline-flex;align-items:center;gap:7px;min-width:110px;justify-content:center}.summary-pagination>.admin-secondary:disabled{opacity:.38;cursor:not-allowed}.summary-page-numbers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}.summary-page-numbers button{min-width:36px;height:36px;padding:0 10px;border:1px solid #303338;border-radius:9px;background:#111315;color:#d8d8d8;font-weight:800;cursor:pointer}.summary-page-numbers button:hover{border-color:#8c6b24;color:#efc35a}.summary-page-numbers button.active{background:#dcae36;border-color:#e7bd50;color:#090a0b}.pagination-left{transform:rotate(-90deg)}.pagination-right{transform:rotate(-90deg)}
+@media(max-width:650px){.summary-services-head{align-items:flex-start;flex-direction:column}.summary-pagination{justify-content:space-between}.summary-page-numbers{order:3;width:100%}.summary-pagination>.admin-secondary{flex:1}}
+.edit-purchase-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #6b531b;background:#181407;border-radius:10px;color:#efbf50}.edit-purchase-banner .admin-secondary{width:auto;white-space:nowrap}.purchase-meta .edit-icon{margin-left:auto}.purchase-meta .edit-icon+.danger-icon{margin-left:0}@media(max-width:700px){.edit-purchase-banner{align-items:stretch;flex-direction:column}.edit-purchase-banner .admin-secondary{width:100%}}

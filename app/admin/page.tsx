@@ -88,6 +88,9 @@ export default function AdminPage() {
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
+  const [summaryPage, setSummaryPage] = useState(1);
+  const SUMMARY_PAGE_SIZE = 8;
 
   const [clientForm, setClientForm] = useState({ name: "", phone: "", email: "", cpfCnpj: "", address: "" });
   const [vehicleForm, setVehicleForm] = useState({ customerId: "", plate: "", brand: "", model: "", year: "", color: "" });
@@ -186,7 +189,10 @@ export default function AdminPage() {
   );
 
   const openOrders = orders.filter((o) => o.status !== "Entregue");
-  const revenue = orders.reduce((sum, o) => sum + Number(o.materialCost || 0) + Number(o.laborCost || 0), 0);
+  const summaryTotalPages = Math.max(1, Math.ceil(orders.length / SUMMARY_PAGE_SIZE));
+  const summaryOrders = orders.slice((summaryPage - 1) * SUMMARY_PAGE_SIZE, summaryPage * SUMMARY_PAGE_SIZE);
+  const paidOrders = orders.filter((o) => (o.paymentStatus || "Não pago") === "Pago");
+  const revenue = paidOrders.reduce((sum, o) => sum + Number(o.materialCost || 0) + Number(o.laborCost || 0), 0);
   const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
   const lastPurchase = purchases[0];
   const purchaseSubtotal = purchaseItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
@@ -197,6 +203,10 @@ export default function AdminPage() {
   const serviceMaterialMargin = serviceMaterialCost - serviceMaterialRealCost;
   const selectedQuoteOrder = orders.find((o) => o.id === quoteOrderId);
 
+  useEffect(() => {
+    if (summaryPage > summaryTotalPages) setSummaryPage(summaryTotalPages);
+  }, [summaryPage, summaryTotalPages]);
+
   const monthOrders = orders.filter((o) => {
     if (o.status !== "Entregue") return false;
     const referenceDate = o.completedAt || o.estimatedDelivery || o.scheduledDate;
@@ -204,8 +214,9 @@ export default function AdminPage() {
   });
   const monthPurchases = purchases.filter((p) => p.purchaseDate?.startsWith(closingMonth));
   const monthExpenses = expenses.filter((e) => e.expenseDate?.startsWith(closingMonth));
-  const monthLaborRevenue = monthOrders.reduce((sum, o) => sum + Number(o.laborCost || 0), 0);
-  const monthMaterialRevenue = monthOrders.reduce((sum, o) => sum + Number(o.materialCost || 0), 0);
+  const paidMonthOrders = monthOrders.filter((o) => (o.paymentStatus || "Não pago") === "Pago");
+  const monthLaborRevenue = paidMonthOrders.reduce((sum, o) => sum + Number(o.laborCost || 0), 0);
+  const monthMaterialRevenue = paidMonthOrders.reduce((sum, o) => sum + Number(o.materialCost || 0), 0);
   const monthRevenue = monthLaborRevenue + monthMaterialRevenue;
   const monthPurchaseCost = monthPurchases.reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
   const monthOperatingCost = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -506,8 +517,8 @@ export default function AdminPage() {
       unit: productForm.unit,
       stockCurrent,
       defaultMarkupPercent: Math.max(0, Number(productForm.defaultMarkupPercent || 0)),
-      createdAt: serverTimestamp(),
-    });
+      ...(editingPurchaseId ? { updatedAt: serverTimestamp() } : { createdAt: serverTimestamp() }),
+    }, { merge: !!editingPurchaseId });
     batch.set(doc(db, "storeCatalog", productRef.id), {
       productId: productRef.id,
       name: productForm.name,
@@ -612,6 +623,36 @@ export default function AdminPage() {
     );
   }
 
+  function startEditPurchase(purchase: PurchaseOrder) {
+    setEditingPurchaseId(purchase.id);
+    setPurchaseForm({
+      supplier: purchase.supplier || "",
+      invoiceNumber: purchase.invoiceNumber || "",
+      purchaseDate: purchase.purchaseDate || "",
+      freightCost: String(Number(purchase.freightCost || 0)),
+      paymentMethod: purchase.paymentMethod || "Pix",
+      notes: purchase.notes || "",
+    });
+    setPurchaseItems((purchase.items || []).map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: Number(item.quantity || 0),
+      unitCost: Number(item.unitCost || 0),
+      subtotal: Number(item.quantity || 0) * Number(item.unitCost || 0),
+    })));
+    setPurchaseItemForm({ productId: "", quantity: "1", unitCost: "" });
+    setNotice("Compra carregada para edição. Altere os dados e clique em Salvar alterações.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditPurchase() {
+    setEditingPurchaseId(null);
+    setPurchaseForm({ supplier: "", invoiceNumber: "", purchaseDate: "", freightCost: "", paymentMethod: "Pix", notes: "" });
+    setPurchaseItems([]);
+    setPurchaseItemForm({ productId: "", quantity: "1", unitCost: "" });
+    setNotice("Edição da compra cancelada.");
+  }
+
   async function addPurchase(e: FormEvent) {
     e.preventDefault();
     if (purchaseItems.length === 0) {
@@ -626,7 +667,8 @@ export default function AdminPage() {
     });
 
     const batch = writeBatch(db);
-    const purchaseRef = doc(collection(db, "purchaseOrders"));
+    const previousPurchase = editingPurchaseId ? purchases.find((p) => p.id === editingPurchaseId) : undefined;
+    const purchaseRef = editingPurchaseId ? doc(db, "purchaseOrders", editingPurchaseId) : doc(collection(db, "purchaseOrders"));
     batch.set(purchaseRef, {
       ...purchaseForm,
       freightCost,
@@ -637,31 +679,42 @@ export default function AdminPage() {
       createdAt: serverTimestamp(),
     });
 
-    allocatedItems.forEach((item) => {
-      const product = products.find((p) => p.id === item.productId);
+    const affectedProductIds = new Set<string>([
+      ...allocatedItems.map((item) => item.productId),
+      ...(previousPurchase?.items || []).map((item) => item.productId),
+    ]);
+
+    affectedProductIds.forEach((productId) => {
+      const product = products.find((p) => p.id === productId);
       if (!product) return;
 
+      const oldItem = previousPurchase?.items?.find((item) => item.productId === productId);
+      const newItem = allocatedItems.find((item) => item.productId === productId);
+      const oldQty = Number(oldItem?.quantity || 0);
+      const newQty = Number(newItem?.quantity || 0);
       const oldStock = Number(product.stockCurrent || 0);
-      const effectiveCost = Number(item.effectiveUnitCost || item.unitCost);
-      const storedAverage = Number(product.avgUnitCost ?? product.lastEffectiveUnitCost ?? product.lastUnitCost ?? 0);
-      const oldAverage = storedAverage > 0 ? storedAverage : effectiveCost;
-      const newStock = oldStock + item.quantity;
-      const newAverage = newStock > 0
-        ? ((oldStock * oldAverage) + (item.quantity * effectiveCost)) / newStock
-        : effectiveCost;
+      const newStock = Math.max(0, oldStock - oldQty + newQty);
 
-      batch.update(doc(db, "products", item.productId), {
-        lastUnitCost: item.unitCost,
-        lastEffectiveUnitCost: item.effectiveUnitCost,
+      const currentAverage = Number(product.avgUnitCost ?? product.lastEffectiveUnitCost ?? product.lastUnitCost ?? 0);
+      const oldEffective = Number(oldItem?.effectiveUnitCost ?? oldItem?.unitCost ?? 0);
+      const newEffective = Number(newItem?.effectiveUnitCost ?? newItem?.unitCost ?? 0);
+      const adjustedInventoryValue = Math.max(0, (oldStock * currentAverage) - (oldQty * oldEffective) + (newQty * newEffective));
+      const newAverage = newStock > 0 ? adjustedInventoryValue / newStock : (newEffective || currentAverage);
+
+      batch.update(doc(db, "products", productId), {
+        ...(newItem ? {
+          lastUnitCost: newItem.unitCost,
+          lastEffectiveUnitCost: newItem.effectiveUnitCost,
+          lastPurchaseDate: purchaseForm.purchaseDate,
+          lastSupplier: purchaseForm.supplier,
+          lastQuantity: newItem.quantity,
+        } : {}),
         avgUnitCost: newAverage,
-        lastPurchaseDate: purchaseForm.purchaseDate,
-        lastSupplier: purchaseForm.supplier,
-        lastQuantity: item.quantity,
         stockCurrent: newStock,
         updatedAt: serverTimestamp(),
       });
-      batch.set(doc(db, "storeCatalog", item.productId), {
-        productId: item.productId,
+      batch.set(doc(db, "storeCatalog", productId), {
+        productId,
         name: product.name,
         category: product.category || "",
         unit: product.unit || "un",
@@ -681,7 +734,9 @@ export default function AdminPage() {
     });
     setPurchaseItems([]);
     setPurchaseItemForm({ productId: "", quantity: "1", unitCost: "" });
-    setNotice("Compra cadastrada. Frete rateado, custo médio atualizado e estoque incrementado.");
+    const wasEditing = !!editingPurchaseId;
+    setEditingPurchaseId(null);
+    setNotice(wasEditing ? "Compra atualizada. Estoque e custo médio foram ajustados pelas diferenças da edição." : "Compra cadastrada. Frete rateado, custo médio atualizado e estoque incrementado.");
     await loadAll();
   }
 
@@ -920,11 +975,24 @@ export default function AdminPage() {
               <article><span>Clientes</span><strong>{customers.length}</strong></article>
               <article><span>Veículos</span><strong>{vehicles.length}</strong></article>
               <article><span>Serviços em andamento</span><strong>{openOrders.length}</strong></article>
-              <article><span>Valor dos serviços</span><strong>{money(revenue)}</strong></article>
+              <article><span>Valor dos serviços pagos</span><strong>{money(revenue)}</strong></article>
               <article><span>Última compra</span><strong>{lastPurchase ? money(lastPurchase.totalAmount) : "-"}</strong><small>{lastPurchase ? dateBR(lastPurchase.purchaseDate) : "Sem compras"}</small></article>
             </div>
-            <h2 className="admin-section-title">Serviços recentes</h2>
-            <OrderTable orders={orders.slice(0, 8)} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
+            <div className="summary-services-head">
+              <div>
+                <h2 className="admin-section-title">Serviços recentes</h2>
+                <span className="summary-record-count">{orders.length} serviço(s) cadastrado(s)</span>
+              </div>
+              {orders.length > 0 && <span className="summary-page-info">Página {summaryPage} de {summaryTotalPages}</span>}
+            </div>
+            <OrderTable orders={summaryOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
+            {summaryTotalPages > 1 && <div className="summary-pagination" aria-label="Paginação dos serviços">
+              <button type="button" className="admin-secondary" disabled={summaryPage === 1} onClick={() => setSummaryPage((page) => Math.max(1, page - 1))}><ChevronUp size={16} className="pagination-left" /> Anterior</button>
+              <div className="summary-page-numbers">
+                {Array.from({ length: summaryTotalPages }, (_, index) => index + 1).map((page) => <button type="button" key={page} className={page === summaryPage ? "active" : ""} onClick={() => setSummaryPage(page)} aria-label={`Ir para página ${page}`}>{page}</button>)}
+              </div>
+              <button type="button" className="admin-secondary" disabled={summaryPage === summaryTotalPages} onClick={() => setSummaryPage((page) => Math.min(summaryTotalPages, page + 1))}>Próxima <ChevronDown size={16} className="pagination-right" /></button>
+            </div>}
           </div>}
 
           {tab === "clientes" && <div className="admin-two-cols">
@@ -1044,7 +1112,7 @@ export default function AdminPage() {
 
             <div className="admin-two-cols purchase-layout">
               <form className="admin-card admin-form" onSubmit={addPurchase}>
-                <h2>Nova ordem de compra</h2>
+                <h2>{editingPurchaseId ? "Editar ordem de compra" : "Nova ordem de compra"}</h2>{editingPurchaseId && <div className="edit-purchase-banner"><span>Você está editando uma compra existente.</span><button type="button" className="admin-secondary" onClick={cancelEditPurchase}>Cancelar edição</button></div>}
                 <label><span>Fornecedor *</span><input value={purchaseForm.supplier} onChange={(e) => setPurchaseForm({ ...purchaseForm, supplier: e.target.value })} required /></label>
                 <div className="admin-form-row"><label><span>Nº da nota</span><input value={purchaseForm.invoiceNumber} onChange={(e) => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })} /></label><label><span>Data da compra *</span><input type="date" value={purchaseForm.purchaseDate} onChange={(e) => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })} required /></label></div>
                 <label><span>Valor do frete (R$)</span><input type="number" min="0" step="0.01" value={purchaseForm.freightCost} onChange={(e) => setPurchaseForm({ ...purchaseForm, freightCost: e.target.value })} placeholder="0,00" /></label>
@@ -1066,10 +1134,10 @@ export default function AdminPage() {
 
                 <label><span>Pagamento</span><select value={purchaseForm.paymentMethod} onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentMethod: e.target.value })}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Boleto</option><option>Prazo</option><option>Outro</option></select></label>
                 <label><span>Observações</span><textarea rows={2} value={purchaseForm.notes} onChange={(e) => setPurchaseForm({ ...purchaseForm, notes: e.target.value })} /></label>
-                <button className="admin-primary" disabled={purchaseItems.length === 0}>Cadastrar compra • {money(purchaseTotal)}</button>
+                <button className="admin-primary" disabled={purchaseItems.length === 0}>{editingPurchaseId ? "Salvar alterações" : "Cadastrar compra"} • {money(purchaseTotal)}</button>
               </form>
 
-              <div className="admin-card"><h2>Histórico de compras</h2><div className="admin-list purchase-list">{purchases.length === 0 ? <p className="admin-muted">Nenhuma compra cadastrada.</p> : purchases.map((p, index) => <article key={p.id} className={index === 0 ? "latest-purchase" : ""}><div className="purchase-line"><div><b>{p.supplier}</b><span>{dateBR(p.purchaseDate)} {p.invoiceNumber ? `• NF ${p.invoiceNumber}` : ""}</span></div><strong>{money(p.totalAmount)}</strong></div>{p.items?.length ? <div className="purchase-history-items">{p.items.map((item) => <small key={`${p.id}-${item.productId}`}>{item.productName}: {item.quantity} × {money(item.unitCost)} = <b>{money(item.subtotal)}</b>{item.effectiveUnitCost != null ? ` • custo final c/ frete ${money(item.effectiveUnitCost)}/${products.find((product) => product.id === item.productId)?.unit || "un"}` : ""}</small>)}</div> : <small>{p.products || "Produtos não detalhados"}</small>}{Number(p.freightCost || 0) > 0 && <small className="purchase-freight">Frete: <b>{money(Number(p.freightCost || 0))}</b> • Produtos: {money(Number(p.subtotalAmount ?? (p.totalAmount - Number(p.freightCost || 0))))}</small>}<div className="purchase-meta"><span>{p.paymentMethod || "Pagamento não informado"}</span>{index === 0 && <em>Última compra</em>}<button type="button" className="danger-icon" onClick={() => removePurchase(p.id)} title="Excluir compra"><Trash2 size={15} /></button></div></article>)}</div></div>
+              <div className="admin-card"><h2>Histórico de compras</h2><div className="admin-list purchase-list">{purchases.length === 0 ? <p className="admin-muted">Nenhuma compra cadastrada.</p> : purchases.map((p, index) => <article key={p.id} className={index === 0 ? "latest-purchase" : ""}><div className="purchase-line"><div><b>{p.supplier}</b><span>{dateBR(p.purchaseDate)} {p.invoiceNumber ? `• NF ${p.invoiceNumber}` : ""}</span></div><strong>{money(p.totalAmount)}</strong></div>{p.items?.length ? <div className="purchase-history-items">{p.items.map((item) => <small key={`${p.id}-${item.productId}`}>{item.productName}: {item.quantity} × {money(item.unitCost)} = <b>{money(item.subtotal)}</b>{item.effectiveUnitCost != null ? ` • custo final c/ frete ${money(item.effectiveUnitCost)}/${products.find((product) => product.id === item.productId)?.unit || "un"}` : ""}</small>)}</div> : <small>{p.products || "Produtos não detalhados"}</small>}{Number(p.freightCost || 0) > 0 && <small className="purchase-freight">Frete: <b>{money(Number(p.freightCost || 0))}</b> • Produtos: {money(Number(p.subtotalAmount ?? (p.totalAmount - Number(p.freightCost || 0))))}</small>}<div className="purchase-meta"><span>{p.paymentMethod || "Pagamento não informado"}</span>{index === 0 && <em>Última compra</em>}<button type="button" className="edit-icon" onClick={() => startEditPurchase(p)} title="Editar compra"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => removePurchase(p.id)} title="Excluir compra"><Trash2 size={15} /></button></div></article>)}</div></div>
             </div>
           </div>}
 
@@ -1118,9 +1186,9 @@ export default function AdminPage() {
 
             <div className="admin-kpis closing-kpis">
               <article><span>Serviços entregues</span><strong>{monthOrders.length}</strong></article>
-              <article><span>Mão de obra faturada</span><strong>{money(monthLaborRevenue)}</strong></article>
-              <article><span>Materiais faturados</span><strong>{money(monthMaterialRevenue)}</strong></article>
-              <article><span>Serviços faturados</span><strong>{money(monthRevenue)}</strong></article><article><span>Vendas da loja</span><strong>{money(monthStoreRevenue)}</strong><small>Lucro bruto {money(monthStoreProfit)}</small></article><article><span>Faturamento total</span><strong>{money(monthTotalRevenue)}</strong></article>
+              <article><span>Mão de obra recebida</span><strong>{money(monthLaborRevenue)}</strong></article>
+              <article><span>Materiais recebidos</span><strong>{money(monthMaterialRevenue)}</strong></article>
+              <article><span>Serviços pagos</span><strong>{money(monthRevenue)}</strong></article><article><span>Vendas da loja</span><strong>{money(monthStoreRevenue)}</strong><small>Lucro bruto {money(monthStoreProfit)}</small></article><article><span>Faturamento total</span><strong>{money(monthTotalRevenue)}</strong></article>
               <article><span>Compras de materiais</span><strong className="negative-value">- {money(monthPurchaseCost)}</strong></article>
               <article><span>Custos operacionais</span><strong className="negative-value">- {money(monthOperatingCost)}</strong></article>
               <article className="profit-kpi"><span>Lucro líquido (caixa)</span><strong className={monthNetProfit >= 0 ? "positive-value" : "negative-value"}>{money(monthNetProfit)}</strong><small>Margem {monthTotalRevenue > 0 ? `${((monthNetProfit / monthTotalRevenue) * 100).toFixed(1)}%` : "0%"}</small></article>
