@@ -884,7 +884,7 @@ export default function AdminPage() {
       ? { paymentStatus, paidAmount: total, paidAt: todayLocal(), updatedAt: serverTimestamp() }
       : { paymentStatus, paidAmount: 0, paymentMethod: "", paidAt: "", updatedAt: serverTimestamp() };
     await updateDoc(doc(db, "serviceOrders", order.id), update);
-    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...update, updatedAt: undefined } as ServiceOrder : o)));
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...update } : o)));
     setNotice(`Pagamento de ${customerName(order.customerId)} atualizado para ${paymentStatus}.`);
   }
 
