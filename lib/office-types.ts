@@ -85,6 +85,8 @@ export interface ServiceOrder {
   paymentMethod?: string;
   /** Data do último registro de pagamento. */
   paidAt?: string;
+  /** Observações registradas no recebimento para exibição no recibo. */
+  paymentNotes?: string;
 }
 
 export interface Product {

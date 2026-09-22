@@ -91,7 +91,8 @@ export default function AdminPage() {
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
   const [summaryPage, setSummaryPage] = useState(1);
   const [partialPaymentOrder, setPartialPaymentOrder] = useState<ServiceOrder | null>(null);
-  const [partialPaymentForm, setPartialPaymentForm] = useState({ amount: "", method: "Pix" });
+  const [partialPaymentForm, setPartialPaymentForm] = useState({ amount: "", method: "Pix", notes: "" });
+  const [paymentTargetStatus, setPaymentTargetStatus] = useState<"Pago" | "Pago parcial">("Pago parcial");
   const SUMMARY_PAGE_SIZE = 8;
 
   const [clientForm, setClientForm] = useState({ name: "", phone: "", email: "", cpfCnpj: "", address: "" });
@@ -872,17 +873,19 @@ export default function AdminPage() {
 
 
   async function updatePaymentStatus(order: ServiceOrder, paymentStatus: "Pago" | "Não pago" | "Pago parcial") {
-    if (paymentStatus === "Pago parcial") {
+    if (paymentStatus === "Pago parcial" || paymentStatus === "Pago") {
       const total = Number(order.materialCost || 0) + Number(order.laborCost || 0);
       const current = Number(order.paidAmount || 0);
       setPartialPaymentOrder(order);
-      setPartialPaymentForm({ amount: current > 0 && current < total ? String(current) : "", method: order.paymentMethod || "Pix" });
+      setPaymentTargetStatus(paymentStatus);
+      setPartialPaymentForm({
+        amount: paymentStatus === "Pago" ? String(total) : (current > 0 && current < total ? String(current) : ""),
+        method: order.paymentMethod || "Pix",
+        notes: order.paymentNotes || ""
+      });
       return;
     }
-    const total = Number(order.materialCost || 0) + Number(order.laborCost || 0);
-    const update = paymentStatus === "Pago"
-      ? { paymentStatus, paidAmount: total, paidAt: todayLocal(), updatedAt: serverTimestamp() }
-      : { paymentStatus, paidAmount: 0, paymentMethod: "", paidAt: "", updatedAt: serverTimestamp() };
+    const update = { paymentStatus, paidAmount: 0, paymentMethod: "", paymentNotes: "", paidAt: "", updatedAt: serverTimestamp() };
     await updateDoc(doc(db, "serviceOrders", order.id), update);
     setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...update } : o)));
     setNotice(`Pagamento de ${customerName(order.customerId)} atualizado para ${paymentStatus}.`);
@@ -891,17 +894,25 @@ export default function AdminPage() {
   async function savePartialPayment(generateReceipt = true) {
     if (!partialPaymentOrder) return;
     const total = Number(partialPaymentOrder.materialCost || 0) + Number(partialPaymentOrder.laborCost || 0);
-    const amount = Number(String(partialPaymentForm.amount).replace(",", "."));
-    if (!amount || amount <= 0 || amount >= total) {
+    const amount = paymentTargetStatus === "Pago" ? total : Number(String(partialPaymentForm.amount).replace(",", "."));
+    if (paymentTargetStatus === "Pago parcial" && (!amount || amount <= 0 || amount >= total)) {
       setNotice(`Informe um valor maior que R$ 0,00 e menor que ${money(total)} para pagamento parcial.`);
       return;
     }
-    const updated = { paymentStatus: "Pago parcial" as const, paidAmount: amount, paymentMethod: partialPaymentForm.method, paidAt: todayLocal() };
+    const updated = {
+      paymentStatus: paymentTargetStatus,
+      paidAmount: amount,
+      paymentMethod: partialPaymentForm.method,
+      paymentNotes: partialPaymentForm.notes.trim(),
+      paidAt: todayLocal()
+    };
     await updateDoc(doc(db, "serviceOrders", partialPaymentOrder.id), { ...updated, updatedAt: serverTimestamp() });
     setOrders((prev) => prev.map((o) => o.id === partialPaymentOrder.id ? { ...o, ...updated } : o));
     const receiptOrder = { ...partialPaymentOrder, ...updated };
     setPartialPaymentOrder(null);
-    setNotice(`Pagamento parcial de ${money(amount)} registrado. Falta ${money(total - amount)}.`);
+    setNotice(paymentTargetStatus === "Pago"
+      ? `Pagamento integral de ${money(total)} registrado.`
+      : `Pagamento parcial de ${money(amount)} registrado. Falta ${money(total - amount)}.`);
     if (generateReceipt) generatePaymentReceipt(receiptOrder);
   }
 
@@ -913,7 +924,7 @@ export default function AdminPage() {
     const receiptWindow = window.open("", "_blank", "width=850,height=950");
     if (!receiptWindow) { setNotice("O navegador bloqueou a janela do recibo. Libere pop-ups e tente novamente."); return; }
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Recibo - ${safe(customerName(order.customerId))}</title><style>
-      *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;background:#eee;margin:0;color:#171717}.page{width:210mm;min-height:297mm;margin:auto;background:#fff;padding:18mm}.head{background:#080808;color:#fff;padding:18px 22px;border-bottom:5px solid #c99523}.brand{font-size:25px;font-weight:900;letter-spacing:5px}.sub{color:#d7a52d;letter-spacing:4px;font-size:10px;margin-top:4px}.title{margin:28px 0 18px;text-align:center}.title h1{margin:0;font-size:25px}.title p{color:#666}.box{border:1px solid #ddd;border-radius:10px;padding:14px;margin:10px 0}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.label{font-size:10px;text-transform:uppercase;color:#777;display:block;margin-bottom:4px}.value{font-weight:700}.amount{margin:20px 0;border:2px solid #c99523;border-radius:12px;padding:18px}.amount div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.amount div:last-child{border:0}.paid{font-size:20px;color:#15783a}.remaining{font-size:18px;color:#a33}.footer{margin-top:55px;text-align:center;color:#666;font-size:11px}.sign{margin:70px auto 0;width:65%;border-top:1px solid #333;padding-top:7px;text-align:center}@page{size:A4;margin:0}@media print{body{background:#fff}.page{margin:0;min-height:297mm}button{display:none}}</style></head><body><div class="page"><div class="head"><div class="brand">FELIPE</div><div class="sub">AUTO DESIGN</div></div><div class="title"><h1>RECIBO DE PAGAMENTO</h1><p>Comprovante de pagamento ${order.paymentStatus === "Pago parcial" ? "parcial" : "do serviço"}</p></div><div class="row"><div class="box"><span class="label">Cliente</span><span class="value">${safe(customerName(order.customerId))}</span></div><div class="box"><span class="label">Veículo</span><span class="value">${safe(vehicleName(order.vehicleId))}</span></div></div><div class="box"><span class="label">Serviço</span><span class="value">${safe(order.serviceDescription)}</span></div><div class="row"><div class="box"><span class="label">Data do pagamento</span><span class="value">${safe(dateBR(order.paidAt || todayLocal()))}</span></div><div class="box"><span class="label">Forma de pagamento</span><span class="value">${safe(order.paymentMethod || "Não informada")}</span></div></div><div class="amount"><div><span>Valor total do serviço</span><b>${money(total)}</b></div><div class="paid"><span>Valor recebido</span><b>${money(paid)}</b></div><div class="remaining"><span>Valor restante</span><b>${money(remaining)}</b></div></div><div class="box"><span class="label">Declaração</span>Recebemos de <b>${safe(customerName(order.customerId))}</b> a quantia de <b>${money(paid)}</b>, referente ao serviço descrito neste recibo. Saldo restante: <b>${money(remaining)}</b>.</div><div class="sign">Felipe Auto Design</div><div class="footer">Avenida Alfredo de Faria, 87 - Tutunas • WhatsApp (34) 99154-3776<br/>Documento gerado pelo sistema de gestão da oficina.</div></div><script>window.onload=()=>setTimeout(()=>window.print(),300);</script></body></html>`;
+      *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;background:#eee;margin:0;color:#171717}.page{width:210mm;min-height:297mm;margin:auto;background:#fff;padding:18mm}.head{background:#080808;color:#fff;padding:18px 22px;border-bottom:5px solid #c99523}.brand{font-size:25px;font-weight:900;letter-spacing:5px}.sub{color:#d7a52d;letter-spacing:4px;font-size:10px;margin-top:4px}.title{margin:28px 0 18px;text-align:center}.title h1{margin:0;font-size:25px}.title p{color:#666}.box{border:1px solid #ddd;border-radius:10px;padding:14px;margin:10px 0}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.label{font-size:10px;text-transform:uppercase;color:#777;display:block;margin-bottom:4px}.value{font-weight:700}.amount{margin:20px 0;border:2px solid #c99523;border-radius:12px;padding:18px}.amount div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.amount div:last-child{border:0}.paid{font-size:20px;color:#15783a}.remaining{font-size:18px;color:#a33}.footer{margin-top:55px;text-align:center;color:#666;font-size:11px}.sign{margin:70px auto 0;width:65%;border-top:1px solid #333;padding-top:7px;text-align:center}@page{size:A4;margin:0}@media print{body{background:#fff}.page{margin:0;min-height:297mm}button{display:none}}</style></head><body><div class="page"><div class="head"><div class="brand">FELIPE</div><div class="sub">AUTO DESIGN</div></div><div class="title"><h1>RECIBO DE PAGAMENTO</h1><p>Comprovante de pagamento ${order.paymentStatus === "Pago parcial" ? "parcial" : "do serviço"}</p></div><div class="row"><div class="box"><span class="label">Cliente</span><span class="value">${safe(customerName(order.customerId))}</span></div><div class="box"><span class="label">Veículo</span><span class="value">${safe(vehicleName(order.vehicleId))}</span></div></div><div class="box"><span class="label">Serviço</span><span class="value">${safe(order.serviceDescription)}</span></div><div class="row"><div class="box"><span class="label">Data do pagamento</span><span class="value">${safe(dateBR(order.paidAt || todayLocal()))}</span></div><div class="box"><span class="label">Forma de pagamento</span><span class="value">${safe(order.paymentMethod || "Não informada")}</span></div></div><div class="amount"><div><span>Valor total do serviço</span><b>${money(total)}</b></div><div class="paid"><span>Valor recebido</span><b>${money(paid)}</b></div><div class="remaining"><span>Valor restante</span><b>${money(remaining)}</b></div></div>${order.paymentNotes ? `<div class="box"><span class="label">Observações do pagamento</span><span class="value">${safe(order.paymentNotes)}</span></div>` : ""}<div class="box"><span class="label">Declaração</span>Recebemos de <b>${safe(customerName(order.customerId))}</b> a quantia de <b>${money(paid)}</b>, referente ao serviço descrito neste recibo. Saldo restante: <b>${money(remaining)}</b>.</div><div class="sign">Felipe Auto Design</div><div class="footer">Avenida Alfredo de Faria, 87 - Tutunas • WhatsApp (34) 99154-3776<br/>Documento gerado pelo sistema de gestão da oficina.</div></div><script>window.onload=()=>setTimeout(()=>window.print(),300);</script></body></html>`;
     receiptWindow.document.open(); receiptWindow.document.write(html); receiptWindow.document.close();
   }
 
@@ -1274,11 +1285,12 @@ export default function AdminPage() {
         const amount = Number(String(partialPaymentForm.amount || "0").replace(",", ".")) || 0;
         return <div className="payment-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPartialPaymentOrder(null); }}>
           <div className="payment-modal" role="dialog" aria-modal="true" aria-label="Registrar pagamento parcial">
-            <div className="payment-modal-head"><div><span className="eyebrow">PAGAMENTO PARCIAL</span><h2>Registrar valor recebido</h2></div><button type="button" className="modal-close" onClick={() => setPartialPaymentOrder(null)}>×</button></div>
+            <div className="payment-modal-head"><div><span className="eyebrow">{paymentTargetStatus === "Pago" ? "PAGAMENTO INTEGRAL" : "PAGAMENTO PARCIAL"}</span><h2>{paymentTargetStatus === "Pago" ? "Confirmar pagamento" : "Registrar valor recebido"}</h2></div><button type="button" className="modal-close" onClick={() => setPartialPaymentOrder(null)}>×</button></div>
             <p className="admin-muted">{customerName(partialPaymentOrder.customerId)} • {vehicleName(partialPaymentOrder.vehicleId)}</p>
-            <div className="payment-summary"><div><span>Total do serviço</span><b>{money(total)}</b></div><div><span>Valor informado</span><b>{money(amount)}</b></div><div className="remaining"><span>Falta receber</span><b>{money(Math.max(0, total - amount))}</b></div></div>
-            <label><span>Valor pago agora (R$) *</span><input autoFocus type="number" min="0.01" max={Math.max(0, total - 0.01)} step="0.01" value={partialPaymentForm.amount} onChange={(e) => setPartialPaymentForm({ ...partialPaymentForm, amount: e.target.value })} placeholder="0,00" /></label>
+            <div className="payment-summary"><div><span>Total do serviço</span><b>{money(total)}</b></div><div><span>Valor recebido</span><b>{money(paymentTargetStatus === "Pago" ? total : amount)}</b></div><div className="remaining"><span>Falta receber</span><b>{money(paymentTargetStatus === "Pago" ? 0 : Math.max(0, total - amount))}</b></div></div>
+            {paymentTargetStatus === "Pago parcial" && <label><span>Valor pago agora (R$) *</span><input autoFocus type="number" min="0.01" max={Math.max(0, total - 0.01)} step="0.01" value={partialPaymentForm.amount} onChange={(e) => setPartialPaymentForm({ ...partialPaymentForm, amount: e.target.value })} placeholder="0,00" /></label>}
             <label><span>Forma de pagamento *</span><select value={partialPaymentForm.method} onChange={(e) => setPartialPaymentForm({ ...partialPaymentForm, method: e.target.value })}><option>Pix</option><option>Dinheiro</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Transferência</option><option>Boleto</option><option>Outro</option></select></label>
+            <label><span>Observações do pagamento</span><textarea rows={4} value={partialPaymentForm.notes} onChange={(e) => setPartialPaymentForm({ ...partialPaymentForm, notes: e.target.value })} placeholder="Ex.: entrada referente ao serviço, pagamento combinado com o cliente, parcela 1/2..." /></label>
             <div className="payment-modal-actions"><button type="button" className="admin-secondary" onClick={() => setPartialPaymentOrder(null)}>Cancelar</button><button type="button" className="admin-primary" onClick={() => savePartialPayment(true)}><FileDown size={17} /> Salvar e gerar recibo PDF</button></div>
           </div>
         </div>;
