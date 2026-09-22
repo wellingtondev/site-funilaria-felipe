@@ -650,3 +650,25 @@ input[type="month"]::-webkit-calendar-picker-indicator { filter: none; opacity: 
 
 /* Pagamento parcial de serviços */
 .payment-cell{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:150px}.payment-cell small{font-size:.7rem;color:#aeb3b8;line-height:1.3}.payment-status-select{border-radius:999px!important;padding:8px 30px 8px 12px!important;font-size:.76rem!important;font-weight:900!important;min-width:122px!important;cursor:pointer}.payment-status-select.paid{background:#102b1a!important;border-color:#245a36!important;color:#65d58b!important}.payment-status-select.partial{background:#302608!important;border-color:#8b6a16!important;color:#f3c74f!important}.payment-status-select.unpaid{background:#2b1717!important;border-color:#713232!important;color:#ff9f9f!important}.receipt-mini{display:inline-flex;align-items:center;gap:5px;border:1px solid #5c4919;background:#181407;color:#e8b83f;border-radius:7px;padding:5px 8px;font-size:.68rem;font-weight:800;cursor:pointer}.payment-modal-backdrop{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}.payment-modal{width:min(540px,100%);background:#101214;border:1px solid #35383c;border-radius:18px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.55)}.payment-modal-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:8px}.payment-modal-head h2{margin:5px 0 0;font-size:1.45rem}.modal-close{width:38px;height:38px;border-radius:9px;border:1px solid #35383c;background:#17191c;color:#fff;font-size:24px;cursor:pointer}.payment-modal label{display:block;margin-top:14px}.payment-modal label>span{display:block;margin-bottom:7px;font-size:.78rem;color:#d5d8db}.payment-modal input,.payment-modal select{width:100%;background:#0c0e10;border:1px solid #34383d;border-radius:10px;padding:12px;color:#fff}.payment-summary{border:1px solid #383116;background:#171408;border-radius:12px;padding:12px 14px;margin:16px 0}.payment-summary div{display:flex;justify-content:space-between;gap:20px;padding:6px 0}.payment-summary span{color:#b9bdc1;font-size:.8rem}.payment-summary b{color:#e8b83f}.payment-summary .remaining{border-top:1px solid #3c3315;margin-top:5px;padding-top:10px}.payment-summary .remaining b{color:#ffb2a8}.payment-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.payment-modal-actions button{width:auto}@media(max-width:560px){.payment-modal{padding:17px}.payment-modal-actions{flex-direction:column-reverse}.payment-modal-actions button{width:100%}}
+
+/* Loja: categorias em menu lateral, sem rolagem horizontal */
+.store-catalog-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:22px;align-items:start}
+.store-category-sidebar{position:sticky;top:88px;border:1px solid #292c30;border-radius:16px;background:#0d0f11;padding:14px;min-width:0}
+.store-category-sidebar-title{display:block;color:#d4a333;font-size:.72rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:2px 4px 11px}
+.store-category-sidebar .store-filters{display:flex;flex-direction:column;gap:7px;overflow:visible;padding:0}
+.store-category-sidebar .store-filters button{width:100%;text-align:left;white-space:normal;padding:10px 12px}
+.store-products-area{min-width:0}
+.store-catalog-layout .store-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1000px){
+  .store-catalog-layout{grid-template-columns:165px minmax(0,1fr);gap:16px}
+  .store-catalog-layout .store-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:720px){
+  .store-catalog-layout{grid-template-columns:1fr}
+  .store-category-sidebar{position:static;padding:12px}
+  .store-category-sidebar .store-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .store-category-sidebar .store-filters button{text-align:center}
+}
+@media(max-width:520px){
+  .store-catalog-layout .store-grid{grid-template-columns:1fr}
+}
