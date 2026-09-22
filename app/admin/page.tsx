@@ -90,6 +90,8 @@ export default function AdminPage() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
   const [summaryPage, setSummaryPage] = useState(1);
+  const [partialPaymentOrder, setPartialPaymentOrder] = useState<ServiceOrder | null>(null);
+  const [partialPaymentForm, setPartialPaymentForm] = useState({ amount: "", method: "Pix" });
   const SUMMARY_PAGE_SIZE = 8;
 
   const [clientForm, setClientForm] = useState({ name: "", phone: "", email: "", cpfCnpj: "", address: "" });
@@ -191,8 +193,13 @@ export default function AdminPage() {
   const openOrders = orders.filter((o) => o.status !== "Entregue");
   const summaryTotalPages = Math.max(1, Math.ceil(orders.length / SUMMARY_PAGE_SIZE));
   const summaryOrders = orders.slice((summaryPage - 1) * SUMMARY_PAGE_SIZE, summaryPage * SUMMARY_PAGE_SIZE);
-  const paidOrders = orders.filter((o) => (o.paymentStatus || "Não pago") === "Pago");
-  const revenue = paidOrders.reduce((sum, o) => sum + Number(o.materialCost || 0) + Number(o.laborCost || 0), 0);
+  const receivedAmount = (o: ServiceOrder) => {
+    const total = Number(o.materialCost || 0) + Number(o.laborCost || 0);
+    if ((o.paymentStatus || "Não pago") === "Pago") return total;
+    if (o.paymentStatus === "Pago parcial") return Math.min(total, Math.max(0, Number(o.paidAmount || 0)));
+    return 0;
+  };
+  const revenue = orders.reduce((sum, o) => sum + receivedAmount(o), 0);
   const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
   const lastPurchase = purchases[0];
   const purchaseSubtotal = purchaseItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
@@ -214,10 +221,12 @@ export default function AdminPage() {
   });
   const monthPurchases = purchases.filter((p) => p.purchaseDate?.startsWith(closingMonth));
   const monthExpenses = expenses.filter((e) => e.expenseDate?.startsWith(closingMonth));
-  const paidMonthOrders = monthOrders.filter((o) => (o.paymentStatus || "Não pago") === "Pago");
-  const monthLaborRevenue = paidMonthOrders.reduce((sum, o) => sum + Number(o.laborCost || 0), 0);
-  const monthMaterialRevenue = paidMonthOrders.reduce((sum, o) => sum + Number(o.materialCost || 0), 0);
-  const monthRevenue = monthLaborRevenue + monthMaterialRevenue;
+  const monthRevenue = monthOrders.reduce((sum, o) => sum + receivedAmount(o), 0);
+  const monthMaterialRevenue = monthOrders.reduce((sum, o) => {
+    const total = Number(o.materialCost || 0) + Number(o.laborCost || 0);
+    return sum + (total > 0 ? receivedAmount(o) * (Number(o.materialCost || 0) / total) : 0);
+  }, 0);
+  const monthLaborRevenue = monthRevenue - monthMaterialRevenue;
   const monthPurchaseCost = monthPurchases.reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
   const monthOperatingCost = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const confirmedStoreOrders = storeOrders.filter((order) => order.status === "Confirmado");
@@ -443,6 +452,9 @@ export default function AdminPage() {
       laborCost: Number(orderForm.laborCost || 0),
       status: existingOrder?.status || ("Agendado" as ServiceStatus),
       paymentStatus: existingOrder?.paymentStatus || "Não pago",
+      paidAmount: existingOrder?.paidAmount || 0,
+      paymentMethod: existingOrder?.paymentMethod || "",
+      paidAt: existingOrder?.paidAt || "",
       publicToken: token,
       ...(existingOrder?.completedAt ? { completedAt: existingOrder.completedAt } : {}),
     };
@@ -859,10 +871,50 @@ export default function AdminPage() {
   }
 
 
-  async function updatePaymentStatus(order: ServiceOrder, paymentStatus: "Pago" | "Não pago") {
-    await updateDoc(doc(db, "serviceOrders", order.id), { paymentStatus, updatedAt: serverTimestamp() });
-    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, paymentStatus } : o)));
+  async function updatePaymentStatus(order: ServiceOrder, paymentStatus: "Pago" | "Não pago" | "Pago parcial") {
+    if (paymentStatus === "Pago parcial") {
+      const total = Number(order.materialCost || 0) + Number(order.laborCost || 0);
+      const current = Number(order.paidAmount || 0);
+      setPartialPaymentOrder(order);
+      setPartialPaymentForm({ amount: current > 0 && current < total ? String(current) : "", method: order.paymentMethod || "Pix" });
+      return;
+    }
+    const total = Number(order.materialCost || 0) + Number(order.laborCost || 0);
+    const update = paymentStatus === "Pago"
+      ? { paymentStatus, paidAmount: total, paidAt: todayLocal(), updatedAt: serverTimestamp() }
+      : { paymentStatus, paidAmount: 0, paymentMethod: "", paidAt: "", updatedAt: serverTimestamp() };
+    await updateDoc(doc(db, "serviceOrders", order.id), update);
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...update, updatedAt: undefined } as ServiceOrder : o)));
     setNotice(`Pagamento de ${customerName(order.customerId)} atualizado para ${paymentStatus}.`);
+  }
+
+  async function savePartialPayment(generateReceipt = true) {
+    if (!partialPaymentOrder) return;
+    const total = Number(partialPaymentOrder.materialCost || 0) + Number(partialPaymentOrder.laborCost || 0);
+    const amount = Number(String(partialPaymentForm.amount).replace(",", "."));
+    if (!amount || amount <= 0 || amount >= total) {
+      setNotice(`Informe um valor maior que R$ 0,00 e menor que ${money(total)} para pagamento parcial.`);
+      return;
+    }
+    const updated = { paymentStatus: "Pago parcial" as const, paidAmount: amount, paymentMethod: partialPaymentForm.method, paidAt: todayLocal() };
+    await updateDoc(doc(db, "serviceOrders", partialPaymentOrder.id), { ...updated, updatedAt: serverTimestamp() });
+    setOrders((prev) => prev.map((o) => o.id === partialPaymentOrder.id ? { ...o, ...updated } : o));
+    const receiptOrder = { ...partialPaymentOrder, ...updated };
+    setPartialPaymentOrder(null);
+    setNotice(`Pagamento parcial de ${money(amount)} registrado. Falta ${money(total - amount)}.`);
+    if (generateReceipt) generatePaymentReceipt(receiptOrder);
+  }
+
+  function generatePaymentReceipt(order: ServiceOrder) {
+    const safe = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char] || char));
+    const total = Number(order.materialCost || 0) + Number(order.laborCost || 0);
+    const paid = order.paymentStatus === "Pago" ? total : Number(order.paidAmount || 0);
+    const remaining = Math.max(0, total - paid);
+    const receiptWindow = window.open("", "_blank", "width=850,height=950");
+    if (!receiptWindow) { setNotice("O navegador bloqueou a janela do recibo. Libere pop-ups e tente novamente."); return; }
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Recibo - ${safe(customerName(order.customerId))}</title><style>
+      *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;background:#eee;margin:0;color:#171717}.page{width:210mm;min-height:297mm;margin:auto;background:#fff;padding:18mm}.head{background:#080808;color:#fff;padding:18px 22px;border-bottom:5px solid #c99523}.brand{font-size:25px;font-weight:900;letter-spacing:5px}.sub{color:#d7a52d;letter-spacing:4px;font-size:10px;margin-top:4px}.title{margin:28px 0 18px;text-align:center}.title h1{margin:0;font-size:25px}.title p{color:#666}.box{border:1px solid #ddd;border-radius:10px;padding:14px;margin:10px 0}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.label{font-size:10px;text-transform:uppercase;color:#777;display:block;margin-bottom:4px}.value{font-weight:700}.amount{margin:20px 0;border:2px solid #c99523;border-radius:12px;padding:18px}.amount div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.amount div:last-child{border:0}.paid{font-size:20px;color:#15783a}.remaining{font-size:18px;color:#a33}.footer{margin-top:55px;text-align:center;color:#666;font-size:11px}.sign{margin:70px auto 0;width:65%;border-top:1px solid #333;padding-top:7px;text-align:center}@page{size:A4;margin:0}@media print{body{background:#fff}.page{margin:0;min-height:297mm}button{display:none}}</style></head><body><div class="page"><div class="head"><div class="brand">FELIPE</div><div class="sub">AUTO DESIGN</div></div><div class="title"><h1>RECIBO DE PAGAMENTO</h1><p>Comprovante de pagamento ${order.paymentStatus === "Pago parcial" ? "parcial" : "do serviço"}</p></div><div class="row"><div class="box"><span class="label">Cliente</span><span class="value">${safe(customerName(order.customerId))}</span></div><div class="box"><span class="label">Veículo</span><span class="value">${safe(vehicleName(order.vehicleId))}</span></div></div><div class="box"><span class="label">Serviço</span><span class="value">${safe(order.serviceDescription)}</span></div><div class="row"><div class="box"><span class="label">Data do pagamento</span><span class="value">${safe(dateBR(order.paidAt || todayLocal()))}</span></div><div class="box"><span class="label">Forma de pagamento</span><span class="value">${safe(order.paymentMethod || "Não informada")}</span></div></div><div class="amount"><div><span>Valor total do serviço</span><b>${money(total)}</b></div><div class="paid"><span>Valor recebido</span><b>${money(paid)}</b></div><div class="remaining"><span>Valor restante</span><b>${money(remaining)}</b></div></div><div class="box"><span class="label">Declaração</span>Recebemos de <b>${safe(customerName(order.customerId))}</b> a quantia de <b>${money(paid)}</b>, referente ao serviço descrito neste recibo. Saldo restante: <b>${money(remaining)}</b>.</div><div class="sign">Felipe Auto Design</div><div class="footer">Avenida Alfredo de Faria, 87 - Tutunas • WhatsApp (34) 99154-3776<br/>Documento gerado pelo sistema de gestão da oficina.</div></div><script>window.onload=()=>setTimeout(()=>window.print(),300);</script></body></html>`;
+    receiptWindow.document.open(); receiptWindow.document.write(html); receiptWindow.document.close();
   }
 
   function copyLink(token: string) {
@@ -985,7 +1037,7 @@ export default function AdminPage() {
               </div>
               {orders.length > 0 && <span className="summary-page-info">Página {summaryPage} de {summaryTotalPages}</span>}
             </div>
-            <OrderTable orders={summaryOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
+            <OrderTable orders={summaryOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onReceipt={generatePaymentReceipt} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
             {summaryTotalPages > 1 && <div className="summary-pagination" aria-label="Paginação dos serviços">
               <button type="button" className="admin-secondary" disabled={summaryPage === 1} onClick={() => setSummaryPage((page) => Math.max(1, page - 1))}><ChevronUp size={16} className="pagination-left" /> Anterior</button>
               <div className="summary-page-numbers">
@@ -1049,7 +1101,7 @@ export default function AdminPage() {
               <div className="form-action-row"><button className="admin-primary">{editingOrderId ? "Salvar alterações do serviço" : "Agendar serviço e gerar acompanhamento"}</button>{editingOrderId && <button type="button" className="admin-secondary" onClick={resetOrderForm}>Cancelar</button>}</div>
             </form>
             <h2 className="admin-section-title">Ordens de serviço</h2>
-            <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
+            <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onReceipt={generatePaymentReceipt} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
           </div>}
 
           {tab === "produtos" && <div className="admin-two-cols product-layout">
@@ -1206,7 +1258,7 @@ export default function AdminPage() {
               <div className="admin-card"><h2>Custos operacionais</h2><div className="admin-list expense-list">{monthExpenses.length === 0 ? <p className="admin-muted">Nenhum custo operacional lançado neste mês.</p> : monthExpenses.map((expense) => <article key={expense.id}><div className="expense-line"><div><b>{expense.category}</b><span>{expense.description} • {dateBR(expense.expenseDate)}</span></div><strong>{money(expense.amount)}</strong><button type="button" className="danger-icon" onClick={() => removeExpense(expense.id)}><Trash2 size={15} /></button></div></article>)}</div></div>
             </div>
 
-            <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} /></div>
+            <div className="admin-card closing-section"><h2>Serviços entregues no mês</h2><OrderTable orders={monthOrders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onReceipt={generatePaymentReceipt} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} /></div>
             <div className="admin-card closing-section"><h2>Vendas da loja no mês</h2><div className="admin-list purchase-list">{monthStoreOrders.length === 0 ? <p className="admin-muted">Nenhuma venda da loja confirmada neste mês.</p> : monthStoreOrders.map((order) => <article key={order.id}><div className="purchase-line"><div><b>{order.customerName}</b><span>{dateBR(order.confirmedAt || order.orderDate)} • Pedido #{order.id.slice(0, 8).toUpperCase()}</span></div><strong>{money(order.totalAmount)}</strong></div><small>{order.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ")}</small><div className="sale-profit inline"><span>Custo {money(Number(order.costAmount || 0))}</span><strong>Lucro bruto {money(Number(order.profitAmount || 0))}</strong></div></article>)}</div></div>
             <div className="admin-card closing-section"><h2>Compras de materiais do mês</h2><div className="admin-list purchase-list">{monthPurchases.length === 0 ? <p className="admin-muted">Nenhuma compra de material neste mês.</p> : monthPurchases.map((p) => <article key={p.id}><div className="purchase-line"><div><b>{p.supplier}</b><span>{dateBR(p.purchaseDate)} {p.invoiceNumber ? `• NF ${p.invoiceNumber}` : ""}</span></div><strong>{money(p.totalAmount)}</strong></div><small>{p.items?.map((item) => `${item.productName} (${item.quantity})`).join(", ") || p.products || "Produtos não detalhados"}</small></article>)}</div></div>
           </div>}
@@ -1216,6 +1268,21 @@ export default function AdminPage() {
         </div>
         </div>
       </section>
+
+      {partialPaymentOrder && (() => {
+        const total = Number(partialPaymentOrder.materialCost || 0) + Number(partialPaymentOrder.laborCost || 0);
+        const amount = Number(String(partialPaymentForm.amount || "0").replace(",", ".")) || 0;
+        return <div className="payment-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPartialPaymentOrder(null); }}>
+          <div className="payment-modal" role="dialog" aria-modal="true" aria-label="Registrar pagamento parcial">
+            <div className="payment-modal-head"><div><span className="eyebrow">PAGAMENTO PARCIAL</span><h2>Registrar valor recebido</h2></div><button type="button" className="modal-close" onClick={() => setPartialPaymentOrder(null)}>×</button></div>
+            <p className="admin-muted">{customerName(partialPaymentOrder.customerId)} • {vehicleName(partialPaymentOrder.vehicleId)}</p>
+            <div className="payment-summary"><div><span>Total do serviço</span><b>{money(total)}</b></div><div><span>Valor informado</span><b>{money(amount)}</b></div><div className="remaining"><span>Falta receber</span><b>{money(Math.max(0, total - amount))}</b></div></div>
+            <label><span>Valor pago agora (R$) *</span><input autoFocus type="number" min="0.01" max={Math.max(0, total - 0.01)} step="0.01" value={partialPaymentForm.amount} onChange={(e) => setPartialPaymentForm({ ...partialPaymentForm, amount: e.target.value })} placeholder="0,00" /></label>
+            <label><span>Forma de pagamento *</span><select value={partialPaymentForm.method} onChange={(e) => setPartialPaymentForm({ ...partialPaymentForm, method: e.target.value })}><option>Pix</option><option>Dinheiro</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Transferência</option><option>Boleto</option><option>Outro</option></select></label>
+            <div className="payment-modal-actions"><button type="button" className="admin-secondary" onClick={() => setPartialPaymentOrder(null)}>Cancelar</button><button type="button" className="admin-primary" onClick={() => savePartialPayment(true)}><FileDown size={17} /> Salvar e gerar recibo PDF</button></div>
+          </div>
+        </div>;
+      })()}
     </main>
   );
 }
@@ -1226,6 +1293,7 @@ function OrderTable({
   vehicleName,
   onStatus,
   onPayment,
+  onReceipt,
   onCopy,
   onEdit,
   onDelete,
@@ -1234,10 +1302,11 @@ function OrderTable({
   customerName: (id: string) => string;
   vehicleName: (id: string) => string;
   onStatus: (order: ServiceOrder, status: ServiceStatus) => void;
-  onPayment: (order: ServiceOrder, paymentStatus: "Pago" | "Não pago") => void;
+  onPayment: (order: ServiceOrder, paymentStatus: "Pago" | "Não pago" | "Pago parcial") => void;
+  onReceipt: (order: ServiceOrder) => void;
   onCopy: (token: string) => void;
   onEdit: (order: ServiceOrder) => void;
   onDelete: (order: ServiceOrder) => void;
 }) {
-  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Cliente / veículo</th><th>Serviço</th><th>Agenda</th><th>Valores</th><th>Status</th><th>Pagamento</th><th>Cliente</th><th>Ações</th></tr></thead><tbody>{orders.length === 0 ? <tr><td colSpan={8}>Nenhum serviço cadastrado.</td></tr> : orders.map((o) => <tr key={o.id}><td><b>{customerName(o.customerId)}</b><small>{vehicleName(o.vehicleId)}</small></td><td>{o.serviceDescription}</td><td><b>{dateBR(o.scheduledDate)}</b><small>Entrega: {dateBR(o.estimatedDelivery)}</small></td><td><b>{money(Number(o.materialCost) + Number(o.laborCost))}</b><small>Material {money(Number(o.materialCost))} • M.O. {money(Number(o.laborCost))}</small></td><td><select value={o.status} onChange={(e) => onStatus(o, e.target.value as ServiceStatus)}>{SERVICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></td><td><button type="button" className={`payment-badge ${(o.paymentStatus || "Não pago") === "Pago" ? "paid" : "unpaid"}`} onClick={() => onPayment(o, (o.paymentStatus || "Não pago") === "Pago" ? "Não pago" : "Pago")} title="Clique para alterar o pagamento">{(o.paymentStatus || "Não pago") === "Pago" ? "✓ Pago" : "Não pago"}</button></td><td><button className="copy-link" onClick={() => onCopy(o.publicToken)}><Copy size={15} /> Copiar link</button></td><td><div className="table-actions"><button type="button" className="edit-icon" onClick={() => onEdit(o)} title="Editar serviço"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => onDelete(o)} title="Excluir serviço"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>;
+  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Cliente / veículo</th><th>Serviço</th><th>Agenda</th><th>Valores</th><th>Status</th><th>Pagamento</th><th>Cliente</th><th>Ações</th></tr></thead><tbody>{orders.length === 0 ? <tr><td colSpan={8}>Nenhum serviço cadastrado.</td></tr> : orders.map((o) => <tr key={o.id}><td><b>{customerName(o.customerId)}</b><small>{vehicleName(o.vehicleId)}</small></td><td>{o.serviceDescription}</td><td><b>{dateBR(o.scheduledDate)}</b><small>Entrega: {dateBR(o.estimatedDelivery)}</small></td><td><b>{money(Number(o.materialCost) + Number(o.laborCost))}</b><small>Material {money(Number(o.materialCost))} • M.O. {money(Number(o.laborCost))}</small></td><td><select value={o.status} onChange={(e) => onStatus(o, e.target.value as ServiceStatus)}>{SERVICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></td><td><div className="payment-cell"><select className={`payment-status-select ${(o.paymentStatus || "Não pago") === "Pago" ? "paid" : o.paymentStatus === "Pago parcial" ? "partial" : "unpaid"}`} value={o.paymentStatus || "Não pago"} onChange={(e) => onPayment(o, e.target.value as "Pago" | "Não pago" | "Pago parcial")}><option>Não pago</option><option>Pago parcial</option><option>Pago</option></select>{o.paymentStatus === "Pago parcial" && <small>{money(Number(o.paidAmount || 0))} pago • falta {money(Math.max(0, Number(o.materialCost || 0) + Number(o.laborCost || 0) - Number(o.paidAmount || 0)))}</small>}{o.paymentStatus === "Pago parcial" && <button type="button" className="receipt-mini" onClick={() => onReceipt(o)} title="Gerar recibo do pagamento parcial"><ReceiptText size={13} /> Recibo</button>}</div></td><td><button className="copy-link" onClick={() => onCopy(o.publicToken)}><Copy size={15} /> Copiar link</button></td><td><div className="table-actions"><button type="button" className="edit-icon" onClick={() => onEdit(o)} title="Editar serviço"><Pencil size={15} /></button><button type="button" className="danger-icon" onClick={() => onDelete(o)} title="Excluir serviço"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>;
 }

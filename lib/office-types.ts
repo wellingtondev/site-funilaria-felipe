@@ -78,7 +78,13 @@ export interface ServiceOrder {
   publicToken: string;
   completedAt?: string;
   /** Situação do pagamento do serviço. */
-  paymentStatus?: "Pago" | "Não pago";
+  paymentStatus?: "Pago" | "Não pago" | "Pago parcial";
+  /** Valor já recebido quando o pagamento é parcial. */
+  paidAmount?: number;
+  /** Forma de pagamento informada no recebimento parcial. */
+  paymentMethod?: string;
+  /** Data do último registro de pagamento. */
+  paidAt?: string;
 }
 
 export interface Product {
