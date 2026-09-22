@@ -166,14 +166,19 @@ export default function StorePage() {
 
       <section className="section store-section">
         <div className="container">
-          {categories.length > 1 && (
-            <div className="store-filters">
-              {categories.map((item) => (
-                <button key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>
-              ))}
-            </div>
-          )}
+          <div className="store-catalog-layout">
+            {categories.length > 1 && (
+              <aside className="store-category-sidebar" aria-label="Categorias da loja">
+                <span className="store-category-sidebar-title">Categorias</span>
+                <div className="store-filters">
+                  {categories.map((item) => (
+                    <button key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>
+                  ))}
+                </div>
+              </aside>
+            )}
 
+            <div className="store-products-area">
           {loading ? (
             <div className="store-empty"><ShoppingBag size={34} /><p>Carregando produtos...</p></div>
           ) : filtered.length === 0 ? (
@@ -213,6 +218,8 @@ export default function StorePage() {
               })}
             </div>
           )}
+            </div>
+          </div>
         </div>
       </section>
 
