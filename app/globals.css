@@ -672,3 +672,32 @@ input[type="month"]::-webkit-calendar-picker-indicator { filter: none; opacity: 
 @media(max-width:520px){
   .store-catalog-layout .store-grid{grid-template-columns:1fr}
 }
+
+/* Custos internos e relatório */
+.internal-cost-panel{padding:20px;border:1px solid #635026;border-radius:16px;background:#17150f;margin:16px 0}
+.internal-cost-heading,.cost-report-header{display:flex;justify-content:space-between;gap:16px;align-items:start}
+.internal-cost-heading h3{margin:8px 0 16px}.internal-cost-heading small{color:#b4a888}
+.internal-cost-badge{display:inline-block!important;color:#e5bc5b!important;font-size:.68rem!important;font-weight:800;letter-spacing:.1em}
+.internal-cost-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0}
+.internal-cost-grid>div{padding:12px;border:1px solid #393329;border-radius:10px;background:#101112}
+.internal-cost-grid dt{color:#aaa;font-size:.78rem}.internal-cost-grid dd{margin:6px 0 0;font-size:1.25rem;font-weight:700;color:#eee}
+.internal-cost-panel p,.cost-report-explanation{font-size:.84rem;color:#aaa;line-height:1.55}
+.cost-warning{padding:14px;border:1px solid #75602c;border-radius:12px;background:#231d11;color:#ead49f!important;line-height:1.5}
+.service-cost-report{display:grid;gap:18px;min-width:0}
+.cost-report-header h2{margin:8px 0}.cost-report-header p{color:#aaa;max-width:680px;line-height:1.5}
+.cost-report-header label{display:grid;gap:8px;min-width:165px;color:#aaa;font-size:.82rem}
+.cost-reference-layout{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.cost-reference-list{display:grid;gap:10px;margin:16px 0}.cost-reference-list>div{display:flex;justify-content:space-between;gap:12px}
+.cost-reference-list dt{color:#aaa}.cost-reference-list dd{margin:0;color:#eee;font-weight:700;white-space:nowrap}
+.cost-reference-total{border-top:1px solid #353535;padding-top:12px}
+.cost-forecast>span{font-size:.72rem;color:#aaa;letter-spacing:.08em}
+.cost-forecast>strong{display:block;font-size:2.5rem;color:#e0b03f;margin:10px 0}
+.cost-forecast p,.cost-forecast small,.cost-empty p{color:#aaa;line-height:1.5}
+.cost-report-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cost-report-kpis strong{font-size:clamp(1.2rem,2vw,1.8rem);overflow-wrap:anywhere}
+.cost-report-table{min-width:1080px}.cost-report-table caption{text-align:left;padding:14px;color:#b9a269;font-size:.85rem}
+.cost-report-table tfoot{background:#19170f;font-weight:700}
+.cost-warning ul{padding-left:20px}.cost-warning li{margin:8px 0}
+@media(max-width:900px){.cost-reference-layout{grid-template-columns:1fr}.cost-report-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.cost-report-header{flex-direction:column}}
+@media(max-width:600px){.internal-cost-grid,.cost-report-kpis{grid-template-columns:1fr}.internal-cost-heading{flex-direction:column}.cost-reference-list>div{flex-wrap:wrap}}
+@media print{.internal-cost-panel,.internal-only{display:none!important}}

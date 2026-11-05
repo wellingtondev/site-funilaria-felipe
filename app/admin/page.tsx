@@ -53,8 +53,11 @@ import {
   Vehicle,
 } from "@/lib/office-types";
 import OfficeCalendar from "@/components/admin/OfficeCalendar";
+import InternalServiceCost from "@/components/admin/InternalServiceCost";
+import ServiceCostReport from "@/components/admin/ServiceCostReport";
+import { buildCustomerQuoteHtml } from "@/lib/customer-quote";
 
-type Tab = "resumo" | "clientes" | "veiculos" | "servicos" | "agenda" | "produtos" | "compras" | "vendas" | "orcamentos" | "fechamento";
+type Tab = "resumo" | "clientes" | "veiculos" | "servicos" | "agenda" | "produtos" | "compras" | "vendas" | "orcamentos" | "fechamento" | "custos";
 
 const money = (value: number) =>
   Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -122,6 +125,7 @@ export default function AdminPage() {
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
   const [purchaseItemForm, setPurchaseItemForm] = useState({ productId: "", quantity: "1", unitCost: "" });
   const [quoteOrderId, setQuoteOrderId] = useState("");
+  const [returnToQuote, setReturnToQuote] = useState(false);
   const [closingMonth, setClosingMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [expenseForm, setExpenseForm] = useState({ description: "", category: "Energia", amount: "", expenseDate: new Date().toISOString().slice(0, 10) });
 
@@ -347,7 +351,8 @@ export default function AdminPage() {
     }
 
     const alreadySelected = serviceMaterials.find((item) => item.productId === product.id)?.quantity || 0;
-    const availableStock = Number(product.stockCurrent || 0);
+    const allocatedQuantity = editingOrderId ? orders.find((order) => order.id === editingOrderId)?.materialItems?.find((item) => item.productId === product.id)?.quantity || 0 : 0;
+    const availableStock = Number(product.stockCurrent || 0) + allocatedQuantity;
     if (alreadySelected + quantity > availableStock) {
       setNotice(`Estoque insuficiente de ${product.name}. Disponível: ${availableStock} ${product.unit || "un"}.`);
       return;
@@ -397,6 +402,7 @@ export default function AdminPage() {
   }
 
   function resetOrderForm() {
+    setReturnToQuote(false);
     setEditingOrderId(null);
     setOrderForm({
       customerId: "",
@@ -412,7 +418,8 @@ export default function AdminPage() {
     setServiceMaterialForm({ productId: "", quantity: "1", markupPercent: "20" });
   }
 
-  function editOrder(order: ServiceOrder) {
+  function editOrder(order: ServiceOrder, fromQuote = false) {
+    setReturnToQuote(fromQuote);
     setEditingOrderId(order.id);
     setOrderForm({
       customerId: order.customerId || "",
@@ -496,6 +503,7 @@ export default function AdminPage() {
     setNotice(existingOrder ? "Serviço atualizado e estoque recalculado com sucesso." : "Serviço agendado, materiais baixados do estoque e acompanhamento criado.");
     resetOrderForm();
     await loadAll();
+    if (returnToQuote) { setQuoteOrderId(ref.id); setTab("orcamentos"); }
   }
 
   async function removeOrder(order: ServiceOrder) {
@@ -936,65 +944,15 @@ export default function AdminPage() {
 
   function generateQuotePdf() {
     if (!selectedQuoteOrder) return;
-
-    const safe = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "\'": "&#039;" }[char] || char));
-    const customer = customers.find((c) => c.id === selectedQuoteOrder.customerId);
-    const vehicle = vehicles.find((v) => v.id === selectedQuoteOrder.vehicleId);
-    const total = Number(selectedQuoteOrder.materialCost || 0) + Number(selectedQuoteOrder.laborCost || 0);
+    const customer = customers.find((item) => item.id === selectedQuoteOrder.customerId);
+    const vehicle = vehicles.find((item) => item.id === selectedQuoteOrder.vehicleId);
     const quoteWindow = window.open("", "_blank", "width=900,height=1100");
-
     if (!quoteWindow) {
       setNotice("O navegador bloqueou a janela do orçamento. Libere pop-ups e tente novamente.");
       return;
     }
-
-    const html = `
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8" />
-<title>Orçamento - ${safe(customer?.name || "Cliente")}</title>
-<style>
-  *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#efefef;color:#151515}.page{width:210mm;min-height:297mm;margin:0 auto;background:white;padding:10mm 12mm}.header{background:#090909;color:#fff;padding:12px 18px;border-bottom:4px solid #c99523}.brand{font-size:27px;font-weight:900;letter-spacing:7px}.brand-sub{color:#d7a52d;letter-spacing:6px;font-size:12px;margin-top:2px}.brand-service{font-size:10px;letter-spacing:3px;margin-top:4px}.title{display:flex;justify-content:space-between;align-items:end;margin:14px 0 10px;border-bottom:1px solid #ddd;padding-bottom:8px}.title h1{margin:0;font-size:24px}.gold{color:#b17c13}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:9px 0}.box{border:1px solid #ddd;border-radius:7px;padding:8px 10px}.box span{display:block;font-size:9px;color:#777;text-transform:uppercase;margin-bottom:3px}.box b{font-size:12px}.service{margin:10px 0;border:1px solid #ddd;border-radius:7px;padding:10px 12px}.service h3{margin:0 0 5px;color:#9b6c0d;font-size:14px}.service p{margin:4px 0;font-size:12px}.values{width:100%;border-collapse:collapse;margin:8px 0}.values td{padding:8px 10px;border-bottom:1px solid #ddd;font-size:12px}.values td:last-child{text-align:right;font-weight:700}.values .total td{font-size:16px;background:#f4e4bd;border:0}.payment{background:#111;color:#fff;border-left:4px solid #c99523;padding:8px 10px;margin:9px 0;font-size:10px;line-height:1.35}.notes{border:1px solid #ddd;border-radius:7px;padding:9px 10px;min-height:48px;font-size:11px}.footer{margin-top:12px;border-top:1px solid #ddd;padding-top:8px;text-align:center;font-size:9px;color:#555;line-height:1.35}.signature{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:22px;text-align:center;font-size:10px}.signature div{border-top:1px solid #333;padding-top:5px}@page{size:A4 portrait;margin:0}@media print{html,body{width:210mm;height:297mm;background:#fff}.page{margin:0;width:210mm;min-height:0;height:297mm;padding:8mm 10mm;overflow:hidden}.header{padding:10px 16px}.title{margin:10px 0 8px}.grid{margin:7px 0}.service{margin:7px 0;padding:8px 10px}.values{margin:6px 0}.values td{padding:6px 9px}.payment{margin:7px 0;padding:7px 9px}.notes{min-height:38px;padding:7px 9px}.signature{margin-top:16px}.footer{margin-top:8px;padding-top:6px}button{display:none}}
-</style>
-</head>
-<body>
-<div class="page">
-  <header class="header"><div class="brand">FELIPE</div><div class="brand-sub">AUTO DESIGN</div><div class="brand-service">FUNILARIA • PINTURA • ESTÉTICA AUTOMOTIVA</div></header>
-  <div class="title"><h1>ORÇAMENTO</h1><div><b>Data:</b> ${new Date().toLocaleDateString("pt-BR")}</div></div>
-
-  <div class="grid">
-    <div class="box"><span>Cliente</span><b>${safe(customer?.name || "Cliente")}</b></div>
-    <div class="box"><span>WhatsApp</span><b>${safe(customer?.phone || "-")}</b></div>
-    <div class="box"><span>Veículo</span><b>${safe(vehicle ? `${vehicle.brand} ${vehicle.model}` : "-")}</b></div>
-    <div class="box"><span>Placa</span><b>${safe(vehicle?.plate || "-")}</b></div>
-  </div>
-
-  <div class="service"><h3>Serviço proposto</h3><p>${safe(selectedQuoteOrder.serviceDescription)}</p>${selectedQuoteOrder.materialItems?.length ? `<hr style="border:0;border-top:1px solid #ddd;margin:14px 0"/><h4 style="margin:0 0 8px">Materiais previstos</h4>${selectedQuoteOrder.materialItems.map((item) => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span>${safe(item.productName)} • ${item.quantity} × ${money(Number(item.unitSalePrice ?? item.unitCost))}</span><b>${money(item.subtotal)}</b></div>`).join("")}` : ""}</div>
-
-  <table class="values">
-    <tr><td>Material</td><td>${money(Number(selectedQuoteOrder.materialCost || 0))}</td></tr>
-    <tr><td>Mão de obra</td><td>${money(Number(selectedQuoteOrder.laborCost || 0))}</td></tr>
-    <tr class="total"><td><b>VALOR TOTAL</b></td><td><b>${money(total)}</b></td></tr>
-  </table>
-
-  <div class="grid">
-    <div class="box"><span>Data agendada</span><b>${dateBR(selectedQuoteOrder.scheduledDate)}</b></div>
-    <div class="box"><span>Estimativa de entrega</span><b>${dateBR(selectedQuoteOrder.estimatedDelivery)}</b></div>
-  </div>
-
-  <div class="payment"><b>Condições de pagamento:</b><br/>Valores à vista via Pix ou dinheiro. Para pagamento parcelado, serão acrescentadas as taxas da maquininha.</div>
-  <div class="notes"><b>Observações</b><br/><br/>${safe(selectedQuoteOrder.notes || "Sem observações adicionais.")}</div>
-
-  <div class="signature"><div>Assinatura do cliente</div><div>Felipe Auto Design</div></div>
-  <footer class="footer"><b>Felipe Auto Design</b><br/>Avenida Alfredo de Faria, 87 - Tutunas - Uberaba/MG<br/>(34) 99154-3776 • @felipeautodesign • www.felipeautodesign.com.br</footer>
-</div>
-<script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
-</body>
-</html>`;
-
     quoteWindow.document.open();
-    quoteWindow.document.write(html);
+    quoteWindow.document.write(buildCustomerQuoteHtml(selectedQuoteOrder, customer, vehicle));
     quoteWindow.document.close();
   }
 
@@ -1028,6 +986,7 @@ export default function AdminPage() {
           <button className={tab === "vendas" ? "active" : ""} onClick={() => setTab("vendas")}><BadgeDollarSign size={17} />Vendas{pendingStoreOrders.length > 0 ? ` (${pendingStoreOrders.length})` : ""}</button>
           <button className={tab === "orcamentos" ? "active" : ""} onClick={() => setTab("orcamentos")}><ReceiptText size={17} />Orçamentos</button>
           <button className={tab === "fechamento" ? "active" : ""} onClick={() => setTab("fechamento")}><WalletCards size={17} />Fechamento</button>
+          <button className={tab === "custos" ? "active" : ""} onClick={() => setTab("custos")}><BadgeDollarSign size={17} />Custos dos serviços</button>
           <button className={tab === "agenda" ? "active" : ""} onClick={() => setTab("agenda")}><CalendarDays size={17} />Agenda</button>
         </nav>
 
@@ -1100,16 +1059,17 @@ export default function AdminPage() {
               </div>
 
               <div className="purchase-cart service-material-cart">
-                {serviceMaterials.length === 0 ? <p className="admin-muted">Nenhum material selecionado. O valor de material ficará em R$ 0,00.</p> : serviceMaterials.map((item) => <div className="purchase-cart-line" key={item.productId}><div><b>{item.productName}</b><span>{item.quantity} × custo {money(item.unitCost)} • acréscimo {Number(item.markupPercent || 0).toLocaleString("pt-BR")}% • cobrar {money(Number(item.unitSalePrice ?? item.unitCost))}/{products.find((p) => p.id === item.productId)?.unit || "un"}</span></div><strong>{money(item.subtotal)}</strong><button type="button" onClick={() => removeServiceMaterial(item.productId)} title="Remover material"><Trash2 size={15} /></button></div>)}
+                {serviceMaterials.length === 0 ? <p className="admin-muted">Nenhum material selecionado. O valor de material ficará em R$ 0,00.</p> : serviceMaterials.map((item) => <div className="purchase-cart-line" key={item.productId}><div><b>{item.productName}</b><span>{item.quantity} × custo {money(item.unitCost)} • acréscimo {Number(item.markupPercent || 0).toLocaleString("pt-BR")}% • cobrar {money(Number(item.unitSalePrice ?? (item.quantity > 0 ? item.subtotal / item.quantity : 0)))}/{products.find((p) => p.id === item.productId)?.unit || "un"}</span></div><strong>{money(item.subtotal)}</strong><button type="button" onClick={() => removeServiceMaterial(item.productId)} title="Remover material"><Trash2 size={15} /></button></div>)}
                 <div className="purchase-cart-total"><span>Custo real</span><strong>{money(serviceMaterialRealCost)}</strong></div>
                 <div className="purchase-cart-total"><span>Margem nos materiais</span><strong>{money(serviceMaterialMargin)}</strong></div>
                 <div className="purchase-cart-total"><span>Valor cobrado em materiais</span><strong>{money(serviceMaterialCost)}</strong></div>
               </div>
 
               <div className="admin-form-row"><label><span>Valor material cobrado (automático)</span><input value={money(serviceMaterialCost)} readOnly /></label><label><span>Valor mão de obra (R$)</span><input type="number" min="0" step="0.01" value={orderForm.laborCost} onChange={(e) => setOrderForm({ ...orderForm, laborCost: e.target.value })} /></label></div>
+              <InternalServiceCost order={{ materialRealCost: serviceMaterialRealCost, materialItems: serviceMaterials, materialCost: serviceMaterialCost, laborCost: Number(orderForm.laborCost || 0) }} />
               <div className="admin-form-row"><label><span>Data agendada *</span><input type="date" value={orderForm.scheduledDate} onChange={(e) => setOrderForm({ ...orderForm, scheduledDate: e.target.value })} required /></label><label><span>Estimativa de entrega *</span><input type="date" value={orderForm.estimatedDelivery} onChange={(e) => setOrderForm({ ...orderForm, estimatedDelivery: e.target.value })} required /></label></div>
               <label><span>Observações para o cliente</span><textarea rows={2} value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} /></label>
-              <div className="form-action-row"><button className="admin-primary">{editingOrderId ? "Salvar alterações do serviço" : "Agendar serviço e gerar acompanhamento"}</button>{editingOrderId && <button type="button" className="admin-secondary" onClick={resetOrderForm}>Cancelar</button>}</div>
+              <div className="form-action-row"><button className="admin-primary">{editingOrderId ? "Salvar alterações do serviço" : "Agendar serviço e gerar acompanhamento"}</button>{editingOrderId && <button type="button" className="admin-secondary" onClick={() => { resetOrderForm(); if (returnToQuote) setTab("orcamentos"); }}>Cancelar</button>}</div>
             </form>
             <h2 className="admin-section-title">Ordens de serviço</h2>
             <OrderTable orders={orders} customerName={customerName} vehicleName={vehicleName} onStatus={updateStatus} onPayment={updatePaymentStatus} onReceipt={generatePaymentReceipt} onCopy={copyLink} onEdit={editOrder} onDelete={removeOrder} />
@@ -1230,19 +1190,25 @@ export default function AdminPage() {
 
           {tab === "orcamentos" && <div className="admin-two-cols quote-layout">
             <div className="admin-card admin-form">
-              <h2>Gerar orçamento em PDF</h2>
+              <h2>Orçamento do veículo</h2>
+              <button className="admin-secondary" type="button" onClick={() => { resetOrderForm(); setReturnToQuote(true); setTab("servicos"); }}>Novo orçamento</button>
               <p className="admin-muted">Selecione uma ordem de serviço já cadastrada. O orçamento será aberto em uma versão pronta para impressão; escolha <b>Salvar como PDF</b> na janela de impressão.</p>
               <label><span>Serviço / ordem *</span><select value={quoteOrderId} onChange={(e) => setQuoteOrderId(e.target.value)}><option value="">Selecione um serviço</option>{orders.map((o) => <option key={o.id} value={o.id}>{customerName(o.customerId)} • {vehicleName(o.vehicleId)} • {o.serviceDescription.slice(0, 55)}</option>)}</select></label>
+              <button className="admin-secondary" type="button" onClick={() => selectedQuoteOrder && editOrder(selectedQuoteOrder, true)} disabled={!selectedQuoteOrder}>Editar materiais e mão de obra</button>
+              <p className="admin-muted">Os materiais são salvos na ordem. Imprimir não movimenta o estoque.</p>
               <button className="admin-primary quote-button" type="button" onClick={generateQuotePdf} disabled={!selectedQuoteOrder}><FileDown size={18} /> Gerar PDF / Imprimir</button>
             </div>
 
             <div className="admin-card quote-preview"><h2>Prévia do orçamento</h2>{!selectedQuoteOrder ? <p className="admin-muted">Selecione um serviço para visualizar os dados que irão para o orçamento.</p> : <>
               <div className="quote-preview-head"><div><span>Cliente</span><b>{customerName(selectedQuoteOrder.customerId)}</b></div><div><span>Veículo</span><b>{vehicleName(selectedQuoteOrder.vehicleId)}</b></div></div>
-              <div className="quote-service"><span>Serviço</span><p>{selectedQuoteOrder.serviceDescription}</p>{selectedQuoteOrder.materialItems?.length ? <div className="quote-material-items">{selectedQuoteOrder.materialItems.map((item) => <small key={item.productId}>{item.productName}: {item.quantity} × {money(Number(item.unitSalePrice ?? item.unitCost))} = <b>{money(item.subtotal)}</b></small>)}</div> : null}</div>
+              <div className="quote-service"><span>Serviço</span><p>{selectedQuoteOrder.serviceDescription}</p>{selectedQuoteOrder.materialItems?.length ? <div className="quote-material-items">{selectedQuoteOrder.materialItems.map((item) => <small key={item.productId}>{item.productName}: {item.quantity} × {money(Number(item.unitSalePrice ?? (item.quantity > 0 ? item.subtotal / item.quantity : 0)))} = <b>{money(item.subtotal)}</b></small>)}</div> : null}</div>
               <div className="quote-values"><div><span>Material</span><b>{money(selectedQuoteOrder.materialCost)}</b></div><div><span>Mão de obra</span><b>{money(selectedQuoteOrder.laborCost)}</b></div><div className="quote-total"><span>Total</span><b>{money(Number(selectedQuoteOrder.materialCost) + Number(selectedQuoteOrder.laborCost))}</b></div></div>
               <small>Pagamento à vista via Pix ou dinheiro. Parcelamento sujeito às taxas da maquininha.</small>
+              <InternalServiceCost order={selectedQuoteOrder} />
             </>}</div>
           </div>}
+
+          {tab === "custos" && <ServiceCostReport orders={orders} customers={customers} vehicles={vehicles} />}
 
           {tab === "fechamento" && <div className="closing-page">
             <div className="closing-toolbar admin-card"><div><h2>Fechamento do mês</h2><p className="admin-muted">Resultado em regime de caixa: serviços entregues + vendas confirmadas no mês, menos compras de materiais e custos operacionais lançados.</p></div><label><span>Mês de referência</span><input type="month" value={closingMonth} onChange={(e) => setClosingMonth(e.target.value)} /></label></div>
