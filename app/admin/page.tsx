@@ -53,6 +53,7 @@ import {
   Vehicle,
 } from "@/lib/office-types";
 import OfficeCalendar from "@/components/admin/OfficeCalendar";
+import WorkshopSummaryPrint from "@/components/admin/WorkshopSummaryPrint";
 import InternalServiceCost from "@/components/admin/InternalServiceCost";
 import ServiceCostReport from "@/components/admin/ServiceCostReport";
 import { buildCustomerQuoteHtml } from "@/lib/customer-quote";
@@ -993,6 +994,7 @@ export default function AdminPage() {
         <div className="admin-content">
         {loading ? <div className="admin-loading">Carregando dados...</div> : <>
           {tab === "resumo" && <div>
+            <WorkshopSummaryPrint orders={orders} products={products} customers={customers} vehicles={vehicles} />
             <div className="admin-kpis admin-kpis-five">
               <article><span>Clientes</span><strong>{customers.length}</strong></article>
               <article><span>Veículos</span><strong>{vehicles.length}</strong></article>

@@ -701,3 +701,28 @@ input[type="month"]::-webkit-calendar-picker-indicator { filter: none; opacity: 
 @media(max-width:900px){.cost-reference-layout{grid-template-columns:1fr}.cost-report-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.cost-report-header{flex-direction:column}}
 @media(max-width:600px){.internal-cost-grid,.cost-report-kpis{grid-template-columns:1fr}.internal-cost-heading{flex-direction:column}.cost-reference-list>div{flex-wrap:wrap}}
 @media print{.internal-cost-panel,.internal-only{display:none!important}}
+
+.summary-report-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.summary-report-toolbar p{color:#999;font-size:.85rem;margin:6px 0}.summary-report-toolbar button{display:flex;align-items:center;gap:8px;white-space:nowrap}.summary-print-settings{margin-bottom:20px}.summary-print-settings label{display:grid;gap:8px;color:#aaa}.summary-material-basis{color:#aaa;font-size:.85rem;line-height:1.5}.summary-print-settings details{margin:18px 0;color:#c7ad70}.summary-print-settings summary{cursor:pointer;margin-bottom:12px}.summary-stock-table{min-width:480px}.summary-print-kpis{margin:18px 0;grid-template-columns:repeat(2,minmax(0,1fr))}.summary-print-kpis strong{font-size:1.4rem}.summary-print-actions{display:flex;gap:12px;flex-wrap:wrap}
+@media(max-width:600px){.summary-report-toolbar{align-items:start;flex-direction:column}.summary-print-kpis{grid-template-columns:1fr}}
+@media print{.workshop-summary-print{display:none!important}}
+
+.report-vehicle-heading{display:flex;justify-content:space-between;gap:18px;padding:18px 0}.report-vehicle-heading h3{margin:0 0 6px}.report-vehicle-heading p{color:#aaa;margin:0}.report-vehicle-heading>div:last-child{display:grid;gap:5px;text-align:right;min-width:160px}.report-vehicle-heading span{font-size:.75rem;color:#aaa}.report-vehicle-heading b{color:#e1b445}.report-material-add{padding:18px;border:1px solid #444034;background:#15140f;border-radius:12px;margin-bottom:18px}.report-material-add h3{margin-top:0}.report-material-fields{display:grid;grid-template-columns:2fr .7fr 1fr 1fr;gap:12px;margin:14px 0}.report-material-add small{display:block;color:#999;margin-top:12px;line-height:1.5}.report-material-table{min-width:650px}.report-material-table input{width:110px}.report-material-actions{margin-top:14px}
+@media(max-width:900px){.report-material-fields{grid-template-columns:1fr 1fr}}@media(max-width:600px){.report-material-fields{grid-template-columns:1fr}.report-vehicle-heading{flex-direction:column}.report-vehicle-heading>div:last-child{text-align:left}}
+
+
+/* Controles do relatório interno */
+.workshop-summary-print,.summary-print-settings,.summary-print-settings label{min-width:0;max-width:100%}
+.summary-print-settings input,.summary-print-settings select{box-sizing:border-box;width:100%;min-width:0;max-width:100%;padding:12px 14px;border:1px solid #383b3e;border-radius:10px;background:#0c0e10;color:#eee;font:inherit;color-scheme:dark;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+.summary-print-settings select{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.summary-print-settings select option{background:#151719;color:#eee}
+.summary-print-settings input:hover,.summary-print-settings select:hover{border-color:#8c702a;background:#121416}
+.summary-print-settings input:focus,.summary-print-settings select:focus{outline:none;border-color:#d8aa31;box-shadow:0 0 0 3px #d8aa3126}
+.summary-print-settings input::placeholder{color:#777}
+.report-material-fields{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) repeat(2,minmax(0,1fr))}
+.report-reference-month{max-width:340px!important;margin-bottom:18px}
+.report-vehicle-heading>div{min-width:0;overflow-wrap:anywhere}
+.summary-print-settings .admin-table-wrap{max-width:100%;overflow-x:auto}
+.summary-print-settings .report-material-table input{width:110px}
+@media(max-width:900px){.report-material-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.report-material-fields{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){.summary-print-settings input,.summary-print-settings select{transition:none}}
