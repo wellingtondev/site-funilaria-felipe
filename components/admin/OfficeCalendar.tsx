@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminButton } from "@/components/admin/ui/AdminFields";
+import { Paper } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ServiceOrder, Customer, Vehicle } from "@/lib/office-types";
@@ -10,14 +12,15 @@ export default function OfficeCalendar({ orders, customers, vehicles }: Props) {
   const [cursor, setCursor] = useState(() => new Date());
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
+
   const days = useMemo(() => {
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
     const arr: Array<Date | null> = Array(first.getDay()).fill(null);
     for (let d = 1; d <= last.getDate(); d++) arr.push(new Date(year, month, d));
     while (arr.length % 7) arr.push(null);
     return arr;
-  }, [year, month, first.getDay(), last.getDate()]);
+  }, [year, month]);
 
   const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const customerName = (id: string) => customers.find(c => c.id === id)?.name || "Cliente";
@@ -26,11 +29,11 @@ export default function OfficeCalendar({ orders, customers, vehicles }: Props) {
     return v ? `${v.brand} ${v.model} • ${v.plate}` : "Veículo";
   };
 
-  return <div className="calendar-card">
+  return <Paper component="div" elevation={0} className="calendar-card">
     <div className="calendar-toolbar">
-      <button onClick={()=>setCursor(new Date(year, month-1, 1))}><ChevronLeft size={18}/></button>
+      <AdminButton aria-label="Mês anterior" onClick={()=>setCursor(new Date(year, month-1, 1))}><ChevronLeft size={18}/></AdminButton>
       <strong>{cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</strong>
-      <button onClick={()=>setCursor(new Date(year, month+1, 1))}><ChevronRight size={18}/></button>
+      <AdminButton aria-label="Próximo mês" onClick={()=>setCursor(new Date(year, month+1, 1))}><ChevronRight size={18}/></AdminButton>
     </div>
     <div className="calendar-grid calendar-week"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
     <div className="calendar-grid">
@@ -43,5 +46,5 @@ export default function OfficeCalendar({ orders, customers, vehicles }: Props) {
         </div>;
       })}
     </div>
-  </div>;
+  </Paper>;
 }

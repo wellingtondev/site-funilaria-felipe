@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import PublicChrome from "@/components/PublicChrome";
 
 export const metadata: Metadata = {
   title: "Felipe Auto Design | Funilaria, Pintura e Estética Automotiva",
@@ -21,9 +22,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="pt-BR">
       <body>
-        <Header />
+        <PublicChrome><Header /></PublicChrome>
         {children}
-        <Footer />
+        <PublicChrome><Footer /></PublicChrome>
       </body>
     </html>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminInput, AdminButton } from "@/components/admin/ui/AdminFields";
+import { Paper } from "@mui/material";
 import { FormEvent, useEffect, useState } from "react";
 import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -31,17 +33,17 @@ export default function AdminLoginPage() {
 
   return (
     <main className="admin-login-page">
-      <section className="admin-login-card">
+      <Paper component="section" elevation={0} className="admin-login-card">
         <div className="admin-badge"><LockKeyhole size={22} /> Área da Oficina</div>
         <h1>Gestão Felipe Auto Design</h1>
         <p>Entre para cadastrar clientes, veículos, serviços e acompanhar a agenda da oficina.</p>
         <form onSubmit={handleSubmit} className="admin-form">
-          <label><span>E-mail</span><div className="admin-input-icon"><Mail size={17}/><input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required /></div></label>
-          <label><span>Senha</span><div className="admin-input-icon"><LockKeyhole size={17}/><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required /></div></label>
+          <div className="admin-field-group"><div className="admin-input-icon"><Mail size={17}/><AdminInput label={<>E-mail</>} type="email" autoComplete="username" value={email} onChange={(e)=>setEmail(e.target.value)} required /></div></div>
+          <div className="admin-field-group"><div className="admin-input-icon"><LockKeyhole size={17}/><AdminInput label={<>Senha</>} type="password" autoComplete="current-password" value={password} onChange={(e)=>setPassword(e.target.value)} required /></div></div>
           {error && <div className="admin-error">{error}</div>}
-          <button className="admin-primary" disabled={loading}>{loading ? "Entrando..." : "Entrar"}</button>
+          <AdminButton className="admin-primary" disabled={loading}>{loading ? "Entrando..." : "Entrar"}</AdminButton>
         </form>
-      </section>
+      </Paper>
     </main>
   );
 }

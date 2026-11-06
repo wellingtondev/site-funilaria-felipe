@@ -1,0 +1,9 @@
+"use client";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { AppRouterCacheProvider } from "@mui/material-nextjs/v15-appRouter";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { ptBR } from "@mui/x-date-pickers/locales";
+import "dayjs/locale/pt-br";
+const theme=createTheme({palette:{mode:"dark",primary:{main:"#e4b44c",contrastText:"#17130a"},background:{default:"#0c1017",paper:"#151b25"},text:{primary:"#edf0f6",secondary:"#9da8ba"},divider:"#293241",success:{main:"#65d6a2"},error:{main:"#ff8585"}},shape:{borderRadius:12},typography:{fontFamily:"Arial, Helvetica, sans-serif",button:{textTransform:"none",fontWeight:700}},components:{MuiButton:{defaultProps:{disableElevation:true},styleOverrides:{root:{borderRadius:10,padding:"10px 16px"}}},MuiTextField:{defaultProps:{variant:"outlined",size:"small"}},MuiOutlinedInput:{styleOverrides:{root:{background:"#101620","&:hover .MuiOutlinedInput-notchedOutline":{borderColor:"#b58c39"},"&.Mui-focused":{boxShadow:"0 0 0 3px #e4b44c15"}},input:{padding:"13px 14px"}}},MuiPaper:{styleOverrides:{root:{backgroundImage:"none"}}},MuiTableCell:{styleOverrides:{root:{borderColor:"#293241",padding:"16px",fontSize:13},head:{color:"#9da8ba",fontWeight:700,background:"#111720"}}},MuiDialog:{styleOverrides:{paper:{border:"1px solid #344052",borderRadius:20}}}}});
+export default function AdminTheme({children}:{children:React.ReactNode}){return <AppRouterCacheProvider><ThemeProvider theme={theme}><LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br" localeText={ptBR.components.MuiLocalizationProvider.defaultProps.localeText}><div className="admin-mui">{children}</div></LocalizationProvider></ThemeProvider></AppRouterCacheProvider>;}

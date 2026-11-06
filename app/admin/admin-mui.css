@@ -1,0 +1,71 @@
+.admin-mui{background:#0c1017;color:#edf0f6;min-height:100vh;color-scheme:dark}
+.admin-mui .admin-page{background:radial-gradient(ellipse at 90% 0,#c49b2510,transparent 40%),#0c1017;padding-top:30px}
+.admin-mui .container{width:min(1560px,calc(100% - 56px))}
+.admin-mui .admin-hero{padding:24px 0 32px;align-items:center}
+.admin-mui .admin-hero h1{font-size:clamp(26px,3vw,38px);letter-spacing:-1.2px;margin:9px 0}
+.admin-mui .admin-hero p{font-size:14px;max-width:760px;color:#9da8ba;line-height:1.7}
+.admin-mui .eyebrow{font-size:10px;letter-spacing:2.5px;color:#e4b44c}
+.admin-mui .admin-workspace{gap:28px}
+.admin-mui .admin-tabs{background:#121822;border:1px solid #27303d;padding:12px;border-radius:16px;gap:6px}
+.admin-mui .admin-tabs .MuiButton-root{border:0;justify-content:flex-start;color:#9da8ba;min-height:46px;padding:12px 15px;font-size:13px;background:transparent}
+.admin-mui .admin-tabs .MuiButton-root:hover{background:#202938;color:#fff}
+.admin-mui .admin-tabs .MuiButton-root.active{background:#e4b44c;color:#17130a;box-shadow:0 5px 20px #d8aa311a}
+.admin-mui .admin-card,.admin-mui .calendar-card{background:#151b25;border:1px solid #293241;border-radius:16px;padding:24px;box-shadow:0 6px 24px #00000014}
+.admin-mui h2{font-size:21px;letter-spacing:-.5px}.admin-mui h3{font-size:16px}
+.admin-mui .admin-form{gap:22px}.admin-mui .admin-form-row{gap:18px}
+.admin-mui .admin-field-group{min-width:0;display:grid;gap:8px}
+.admin-mui .admin-two-cols{gap:24px;align-items:start}
+.admin-mui .MuiFormControl-root{min-width:0;max-width:100%}
+.admin-mui .MuiInputBase-root{font-size:14px;color:#edf0f6;min-width:0}
+.admin-mui .MuiInputBase-root input,.admin-mui .MuiInputBase-root textarea{background:transparent!important;color:inherit!important;border:0!important;border-radius:0!important;box-shadow:none!important;outline:none!important;font:inherit;box-sizing:content-box;width:100%;min-width:0;padding:13px 14px}
+.admin-mui .MuiInputBase-root textarea{padding:0}
+.admin-mui .MuiInputBase-root.MuiInputBase-multiline{padding:14px}
+.admin-mui .MuiFormLabel-root{display:block;color:#9da8ba;font-size:14px;line-height:1.4375em}
+.admin-mui .MuiFormLabel-root.Mui-focused{color:#e4b44c}
+.admin-mui .MuiInputLabel-root{position:absolute;gap:0}
+.admin-mui .MuiInputLabel-root span{color:inherit;font-size:inherit}
+.admin-mui .MuiButton-root{font-family:inherit;line-height:1.6;flex-shrink:0;text-transform:none}
+.admin-mui .MuiButton-contained{background:#e4b44c;color:#17130a;border:1px solid transparent}
+.admin-mui .MuiButton-outlined{background:transparent;border:1px solid #3b4657;color:#d9dfeb}
+.admin-mui .MuiButton-outlined:hover{border-color:#e4b44c;background:#e4b44c0c}
+.admin-mui .MuiButton-root.Mui-disabled{background:#1d2531;color:#616e81;border-color:#293241}
+.admin-mui .admin-kpis{gap:16px;margin-bottom:28px}
+.admin-mui .admin-kpis article{background:linear-gradient(140deg,#192231,#141b25);border:1px solid #2b3646;border-radius:14px;padding:22px;min-width:0;position:relative;overflow:hidden}
+.admin-mui .admin-kpis article:before{content:'';position:absolute;left:0;top:24px;height:28px;width:3px;border-radius:3px;background:#e4b44c}
+.admin-mui .admin-kpis strong{font-size:clamp(21px,2vw,28px);color:#f0cc79;letter-spacing:-.6px;overflow-wrap:anywhere}
+.admin-mui .admin-kpis span{color:#9da8ba;font-size:12px}.admin-mui .admin-kpis small{color:#8491a5}
+.admin-mui .admin-list article{border:1px solid #2b3442;background:#111823;border-radius:12px;padding:16px}
+.admin-mui .admin-table-wrap{border:1px solid #293241;border-radius:14px;background:#151b25;overflow-x:auto;width:100%}
+.admin-mui .admin-table{background:transparent}.admin-mui .admin-table th{background:#111720;color:#a7b2c4;border-color:#293241;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+.admin-mui .admin-table td{border-color:#293241;font-size:13px;padding:16px}
+.admin-mui .admin-table tbody tr:hover{background:#1c2532}
+.admin-mui .admin-table .MuiFormControl-root{min-width:145px}.admin-mui .admin-table small{color:#8d9bb0}
+.admin-mui .admin-muted,.admin-mui .summary-report-toolbar p{color:#9da8ba;line-height:1.7;font-size:13px}
+.admin-mui .report-material-add,.admin-mui .purchase-product-picker,.admin-mui .store-product-box{background:#111823;border:1px solid #303c4e;border-radius:14px;padding:20px}
+.admin-mui .report-material-fields{margin:20px 0}.admin-mui .summary-print-settings{display:grid;gap:20px}
+.admin-mui .summary-print-settings>p,.admin-mui .summary-print-settings>h2{margin:0}
+.admin-mui .report-reference-month{width:320px;max-width:100%!important;margin:0}
+.admin-mui .cost-warning{background:#e4b44c0b;border:1px solid #e4b44c44;color:#e8ce91;border-radius:12px;padding:16px;font-size:13px;line-height:1.7}
+.admin-mui .internal-cost-panel{background:#111823;border:1px solid #3b4657;border-radius:14px;padding:20px}
+.admin-mui .store-toggle{min-width:0}.admin-mui .store-toggle .MuiCheckbox-root{padding:8px;width:auto;height:auto}
+.admin-mui .closing-toolbar .admin-field-group{min-width:230px}
+.admin-mui .admin-input-icon{background:none;border:0;display:block;padding:0}.admin-mui .admin-input-icon>svg{display:none}
+.admin-mui .admin-login-page{background:radial-gradient(ellipse at top,#e4b44c12,transparent 65%),#0c1017;min-height:80vh}
+.admin-mui .admin-login-card{background:#151b25;border:1px solid #303b4d;border-radius:24px;padding:36px;width:min(480px,100%);box-shadow:0 30px 80px #0005}
+.admin-mui .admin-login-card h1{font-size:28px;letter-spacing:-1px}.admin-mui .admin-login-card p{color:#9da8ba;line-height:1.7}
+.admin-mui .calendar-card{padding:20px}.admin-mui .calendar-day{background:#111823;border-color:#293241;min-width:0}.admin-mui .calendar-event{background:#e4b44c12;border-left:3px solid #e4b44c;border-radius:5px}
+.admin-mui .calendar-toolbar{margin-bottom:24px}.admin-mui .calendar-toolbar strong{text-transform:capitalize}
+.admin-mui .stock-edit{align-items:center}.admin-mui .stock-edit .MuiFormControl-root{flex:1}
+.admin-mui .positive-value{color:#65d6a2!important}.admin-mui .negative-value{color:#ff8585!important}
+@media(min-width:901px){.admin-mui .admin-workspace{grid-template-columns:220px minmax(0,1fr)}.admin-mui .admin-tabs{top:92px}}
+@media(max-width:1100px){.admin-mui .admin-two-cols{grid-template-columns:1fr}.admin-mui .admin-kpis-five{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.admin-mui .container{width:calc(100% - 32px)}.admin-mui .admin-tabs{padding:8px;display:flex;flex-direction:row}.admin-mui .admin-tabs .MuiButton-root{white-space:nowrap}.admin-mui .admin-hero{align-items:flex-start;gap:18px}.admin-mui .calendar-grid{min-width:650px}.admin-mui .calendar-card{overflow:auto}}
+@media(max-width:600px){.admin-mui .admin-hero{flex-direction:column}.admin-mui .admin-card{padding:18px}.admin-mui .admin-kpis-five,.admin-mui .admin-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-mui .admin-form-row{grid-template-columns:minmax(0,1fr);gap:20px}.admin-mui .closing-toolbar{flex-direction:column;align-items:stretch}.admin-mui .admin-kpis article{padding:18px}.admin-mui .admin-login-card{padding:24px}}
+@media(prefers-reduced-motion:reduce){.admin-mui *{transition:none!important;animation:none!important}}
+
+.admin-mui .admin-tabs{top:24px;max-height:calc(100vh - 48px)}
+.admin-mui .admin-site-link{font-size:13px;color:#9da8ba;text-decoration:none;padding:8px;white-space:nowrap}
+.admin-mui .MuiButton-root svg{flex-shrink:0}
+.admin-mui .MuiButton-root.edit-icon,.admin-mui .MuiButton-root.danger-icon{padding:8px;width:36px;height:36px;min-width:36px}
+.admin-mui .MuiFormControl-root.payment-select{padding:0;border:0;background:transparent}
+.admin-mui .admin-table .MuiButton-root{white-space:nowrap}

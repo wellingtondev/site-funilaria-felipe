@@ -1,3 +1,4 @@
+import { Paper } from "@mui/material";
 import type { ServiceOrder } from "@/lib/office-types";
 import { COST_REFERENCE, getMaterialRealCost } from "@/lib/service-costs";
 
@@ -12,7 +13,7 @@ export default function InternalServiceCost({ order }: { order: CostOrder }) {
   const revenue = Number(order.materialCost || 0) + Number(order.laborCost || 0);
   const result = total === null ? null : round(revenue - total);
   return (
-    <section className="internal-cost-panel" aria-label="Custos internos da oficina">
+    <Paper component="section" elevation={0} className="internal-cost-panel" aria-label="Custos internos da oficina">
       <div className="internal-cost-heading"><div><span className="internal-cost-badge">SOMENTE OFICINA</span><h3>Custo deste serviço</h3></div><small>Não aparece no orçamento do cliente</small></div>
       <dl className="internal-cost-grid">
         <div><dt>Custo real dos materiais</dt><dd>{materials === null ? "Não informado" : money(materials)}</dd></div>
@@ -22,7 +23,7 @@ export default function InternalServiceCost({ order }: { order: CostOrder }) {
       </dl>
       <p>Base de {COST_REFERENCE.year}: {money(COST_REFERENCE.fixedMonthly)} fixos ÷ {COST_REFERENCE.expectedVehicles} atendimentos + {money(COST_REFERENCE.stayPerVehicle)} de permanência por veículo. Resultado = preço cobrado − custo estimado.</p>
       {materials === null && <p className="cost-warning">Custo histórico dos materiais não informado. O custo total e o resultado ficam indisponíveis até haver dados de custo.</p>}
-    </section>
+    </Paper>
   );
 }
 
